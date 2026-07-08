@@ -95,6 +95,7 @@ export interface ITest {
   startedAt: Date | null;
   finishedAt: Date | null;
   creditsUsed: number;
+  clientId: string | null;    // device-generated id; dedupes offline-queue re-uploads
   createdAt: Date;
 }
 const TestSchema = new Schema<ITest>(
@@ -119,8 +120,14 @@ const TestSchema = new Schema<ITest>(
     startedAt: { type: Date, default: null },
     finishedAt: { type: Date, default: null },
     creditsUsed: { type: Number, default: 1 },
+    clientId: { type: String, default: null },
   },
   { timestamps: { createdAt: true, updatedAt: false } }
+);
+// Idempotent offline uploads: one record per (device, clientId) when set.
+TestSchema.index(
+  { device: 1, clientId: 1 },
+  { unique: true, partialFilterExpression: { clientId: { $type: 'string' } } }
 );
 
 /* ------------------------------ CreditTx --------------------------------- */

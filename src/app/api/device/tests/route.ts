@@ -27,7 +27,26 @@ export async function POST(req: NextRequest) {
   ]);
   if (!clinic || !device) return NextResponse.json({ error: 'not found' }, { status: 404 });
 
+  // Idempotency: an offline device may retry an upload it already delivered. If
+  // this (device, clientId) is already stored, return it without re-charging.
+  const clientId = parsed.data.clientId ?? null;
+  if (clientId) {
+    const dup = await Test.findOne({ device: device._id, clientId }).lean();
+    if (dup) {
+      return NextResponse.json({
+        id: String(dup._id),
+        positive: dup.result?.positive ?? false,
+        concentration: dup.result?.value ?? null,
+        creditsUsed: dup.creditsUsed ?? 0,
+        credits: clinic.credits,
+        duplicate: true,
+      });
+    }
+  }
+
   // Compute concentration + result from the raw reading using the device config.
+  // The device computes the same thing offline; the backend re-derives it here so
+  // the stored record always reflects the authoritative calibration.
   const { i0, a, b, ths } = device.config;
   const raw = parsed.data.raw ?? null;
   let concentration: number | null = null;
@@ -41,18 +60,40 @@ export async function POST(req: NextRequest) {
   const balance = await applyCredits(String(clinic._id), -1, 'test_consume');
   const creditsUsed = balance === null ? 0 : 1;
 
-  const test = await Test.create({
-    device: device._id,
-    clinic: clinic._id,
-    vet: parsed.data.vet ?? '',
-    patient: parsed.data.patient ?? {},
-    raw,
-    temp: parsed.data.temp ?? null,
-    result: { positive, value: concentration },
-    startedAt: parsed.data.startedAt ?? null,
-    finishedAt: parsed.data.finishedAt ?? null,
-    creditsUsed,
-  });
+  let test;
+  try {
+    test = await Test.create({
+      device: device._id,
+      clinic: clinic._id,
+      vet: parsed.data.vet ?? '',
+      patient: parsed.data.patient ?? {},
+      raw,
+      temp: parsed.data.temp ?? null,
+      result: { positive, value: concentration },
+      startedAt: parsed.data.startedAt ?? null,
+      finishedAt: parsed.data.finishedAt ?? null,
+      creditsUsed,
+      clientId,
+    });
+  } catch (err: unknown) {
+    // Lost the race against a concurrent identical upload: refund the credit we
+    // just consumed and return the already-stored record.
+    if (clientId && (err as { code?: number }).code === 11000) {
+      if (balance !== null) await applyCredits(String(clinic._id), 1, 'test_dedupe_refund');
+      const dup = await Test.findOne({ device: device._id, clientId }).lean();
+      if (dup) {
+        return NextResponse.json({
+          id: String(dup._id),
+          positive: dup.result?.positive ?? false,
+          concentration: dup.result?.value ?? null,
+          creditsUsed: dup.creditsUsed ?? 0,
+          credits: clinic.credits,
+          duplicate: true,
+        });
+      }
+    }
+    throw err;
+  }
   await Device.updateOne({ _id: device._id }, { lastSeenAt: new Date() });
 
   return NextResponse.json({

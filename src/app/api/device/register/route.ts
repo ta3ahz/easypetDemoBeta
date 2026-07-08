@@ -41,5 +41,5 @@ export async function POST(req: NextRequest) {
     { new: true, upsert: true, setDefaultsOnInsert: true }
   );
 
-  return NextResponse.json({ token: issueDeviceToken(device, clinic), clinic: clinicPublic(clinic) });
+  return NextResponse.json({ token: issueDeviceToken(device, clinic), clinic: clinicPublic(clinic), config: device.config });
 }

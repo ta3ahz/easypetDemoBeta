@@ -25,5 +25,6 @@ export async function POST(req: NextRequest) {
     registered: true,
     token: issueDeviceToken(device, clinic),
     clinic: clinicPublic(clinic),
+    config: device.config,
   });
 }

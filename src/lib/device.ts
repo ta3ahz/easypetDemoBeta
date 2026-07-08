@@ -46,6 +46,7 @@ export const testSchema = z.object({
     .optional(),
   startedAt: z.coerce.date().nullable().optional(),
   finishedAt: z.coerce.date().nullable().optional(),
+  clientId: z.string().max(40).optional(),           // dedupes offline-queue re-uploads
 });
 
 export const redeemSchema = z.object({ code: z.string().trim().toUpperCase().min(4).max(24) });
