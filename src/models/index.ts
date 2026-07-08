@@ -176,7 +176,28 @@ const RedeemCodeSchema = new Schema<IRedeemCode>(
   { timestamps: { createdAt: true, updatedAt: false } }
 );
 
+/* ------------------------------ AuditLog --------------------------------- */
+export interface IAuditLog {
+  _id: Types.ObjectId;
+  actor: string;              // who did it (admin email / clinic name)
+  action: string;            // e.g. 'grant_credits', 'set_config', 'reset_pin'
+  target: string;            // what was affected (clinic/device label)
+  detail: string;            // human-readable summary
+  createdAt: Date;
+}
+const AuditLogSchema = new Schema<IAuditLog>(
+  {
+    actor: { type: String, required: true },
+    action: { type: String, required: true },
+    target: { type: String, default: '' },
+    detail: { type: String, default: '' },
+  },
+  { timestamps: { createdAt: true, updatedAt: false } }
+);
+
 /* Guard against model recompilation on Next.js hot reload. */
+export const AuditLog =
+  (models.AuditLog as mongoose.Model<IAuditLog>) || model<IAuditLog>('AuditLog', AuditLogSchema);
 export const Clinic = (models.Clinic as mongoose.Model<IClinic>) || model<IClinic>('Clinic', ClinicSchema);
 export const Device = (models.Device as mongoose.Model<IDevice>) || model<IDevice>('Device', DeviceSchema);
 export const Test = (models.Test as mongoose.Model<ITest>) || model<ITest>('Test', TestSchema);

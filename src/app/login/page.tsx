@@ -14,9 +14,13 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
       <div className="w-full max-w-md">
         <div className="flex items-center gap-3 justify-center mb-6">
-          <div className="w-11 h-11 rounded-2xl bg-blue-600 grid place-items-center text-white text-2xl font-bold shadow-lg shadow-blue-600/30">+</div>
+          <div className="w-11 h-11 rounded-2xl grid place-items-center bg-gradient-to-b from-blue-600 to-blue-900 shadow-lg shadow-blue-600/30">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="white" aria-hidden>
+              <path d="M12 2.2c3.8 4.9 6 8 6 11.1a6 6 0 1 1-12 0C6 10.2 8.2 7.1 12 2.2z" />
+            </svg>
+          </div>
           <div className="text-2xl font-bold text-slate-800">
-            easy<span className="text-blue-600">PET</span>
+            uri<span className="text-blue-600">BX</span>
           </div>
         </div>
 
@@ -53,7 +57,7 @@ export default function LoginPage() {
             )}
           </div>
         </div>
-        <p className="text-center text-xs text-slate-400 mt-4">easyPET · veterinary biomarker platform</p>
+        <p className="text-center text-xs text-slate-400 mt-4">uriBX · urine biomarker platform</p>
       </div>
     </div>
   );
