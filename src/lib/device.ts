@@ -27,6 +27,7 @@ export const loginSchema = z.object({
 export const testSchema = z.object({
   vet: z.string().max(40).optional(),
   raw: z.number().positive().optional(),             // photometer reading; backend computes result
+  temp: z.number().optional(),                       // chamber temperature (°C) at measurement
   patient: z
     .object({
       name: z.string().max(60).optional(),

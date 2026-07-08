@@ -5,7 +5,7 @@ import { PanelShell } from '@/components/PanelShell';
 import { ADMIN_NAV } from '@/components/nav';
 import { Section, TableWrap, Th, Td, Row, btn, input } from '@/components/ui';
 import { fmtDateTime } from '@/lib/format';
-import { updateDeviceConfig, setDeviceCredits } from '../actions';
+import { updateDeviceConfig, setDeviceCredits, deleteDevice } from '../actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,7 +25,7 @@ export default async function AdminDevices() {
         <TableWrap>
           <thead className="bg-slate-50">
             <tr>
-              <Th>UID</Th><Th>Clinic</Th><Th>FW</Th><Th>Last seen</Th><Th>Credits (clinic)</Th><Th>Calibration</Th>
+              <Th>UID</Th><Th>Clinic</Th><Th>FW</Th><Th>Last seen</Th><Th>Credits (clinic)</Th><Th>Calibration</Th><Th>Actions</Th>
             </tr>
           </thead>
           <tbody>
@@ -54,6 +54,14 @@ export default async function AdminDevices() {
                       <Cfg name="b" v={d.config?.b} />
                       <Cfg name="ths" v={d.config?.ths} />
                       <button className={btn}>Save</button>
+                    </form>
+                  </Td>
+                  <Td>
+                    <form action={deleteDevice}>
+                      <input type="hidden" name="deviceId" value={String(d._id)} />
+                      <button className="rounded-lg border border-red-200 text-red-600 px-3 py-1.5 text-xs font-semibold hover:bg-red-50 transition-colors">
+                        Remove
+                      </button>
                     </form>
                   </Td>
                 </Row>

@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
     vet: parsed.data.vet ?? '',
     patient: parsed.data.patient ?? {},
     raw,
+    temp: parsed.data.temp ?? null,
     result: { positive, value: concentration },
     startedAt: parsed.data.startedAt ?? null,
     finishedAt: parsed.data.finishedAt ?? null,

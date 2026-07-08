@@ -23,7 +23,7 @@ export async function GET() {
     .populate('device', 'uid')
     .lean();
 
-  const header = ['date', 'clinic', 'device', 'vet', 'patient', 'owner', 'species', 'sex', 'age', 'weight', 'raw', 'concentration', 'result'];
+  const header = ['date', 'clinic', 'device', 'vet', 'patient', 'owner', 'species', 'sex', 'age', 'weight', 'raw', 'concentration', 'temp', 'result'];
   const rows = tests.map((t) =>
     [
       new Date(t.finishedAt ?? t.createdAt).toISOString(),
@@ -38,6 +38,7 @@ export async function GET() {
       t.patient?.weight ?? '',
       t.raw ?? '',
       t.result?.value ?? '',
+      t.temp ?? '',
       t.result?.positive ? 'POSITIVE' : 'NEGATIVE',
     ].map(csvCell).join(',')
   );

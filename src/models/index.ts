@@ -83,6 +83,7 @@ export interface ITest {
     weight: string;
   };
   raw: number | null;         // photometer raw reading (from UART "2")
+  temp: number | null;        // chamber temperature at measurement (°C)
   result: {
     positive: boolean;
     value: number | null;     // computed concentration
@@ -106,6 +107,7 @@ const TestSchema = new Schema<ITest>(
       weight: { type: String, default: '' },
     },
     raw: { type: Number, default: null },
+    temp: { type: Number, default: null },
     result: {
       positive: { type: Boolean, default: false },
       value: { type: Number, default: null },

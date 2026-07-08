@@ -99,6 +99,16 @@ export async function updateDeviceConfig(formData: FormData) {
   revalidatePath('/admin/devices');
 }
 
+export async function deleteDevice(formData: FormData) {
+  const admin = await requireAdmin();
+  const deviceId = String(formData.get('deviceId') || '');
+  if (!deviceId) return;
+  await dbConnect();
+  const device = await Device.findByIdAndDelete(deviceId);   // measurements are kept for records
+  await logAudit(admin.email, 'delete_device', device?.uid ?? deviceId, 'device removed');
+  revalidatePath('/admin/devices');
+}
+
 // Directly set the owning clinic's credit balance from the Devices tab.
 export async function setDeviceCredits(formData: FormData) {
   const admin = await requireAdmin();

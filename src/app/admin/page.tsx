@@ -37,7 +37,7 @@ export default async function AdminMeasurements() {
           <thead className="bg-slate-50">
             <tr>
               <Th>Date</Th><Th>Clinic</Th><Th>Device</Th><Th>Patient</Th><Th>Species</Th>
-              <Th>Vet</Th><Th>Raw</Th><Th>Concentration</Th><Th>Result</Th>
+              <Th>Vet</Th><Th>Raw</Th><Th>Concentration</Th><Th>Temp</Th><Th>Result</Th>
             </tr>
           </thead>
           <tbody>
@@ -51,6 +51,7 @@ export default async function AdminMeasurements() {
                 <Td>{t.vet || '—'}</Td>
                 <Td className="font-mono">{t.raw ?? '—'}</Td>
                 <Td className="font-mono">{t.result?.value != null ? t.result.value.toFixed(3) : '—'}</Td>
+                <Td className="font-mono">{t.temp != null ? `${t.temp.toFixed(1)}°C` : '—'}</Td>
                 <Td><ResultBadge positive={t.result?.positive} /></Td>
               </Row>
             ))}
