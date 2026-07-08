@@ -15,7 +15,9 @@ import mongoose, { Schema, model, models, Types } from 'mongoose';
 export interface IClinic {
   _id: Types.ObjectId;
   name: string;               // unique username (clinic name)
-  pinHash: string;            // bcrypt hash of the 6-digit PIN
+  pinHash: string;            // bcrypt hash of the 6-digit PIN (web login)
+  pinSalt: string;            // salt for the device-side SHA-256 PIN verifier
+  pinCheck: string;           // sha256(pinSalt + pin) — offline device verification
   vets: string[];             // veterinarian names (max 3 on device)
   credits: number;            // remaining test credits
   status: 'active' | 'suspended';
@@ -26,6 +28,8 @@ const ClinicSchema = new Schema<IClinic>(
   {
     name: { type: String, required: true, unique: true, trim: true },
     pinHash: { type: String, required: true },
+    pinSalt: { type: String, default: '' },
+    pinCheck: { type: String, default: '' },
     vets: { type: [String], default: [] },
     credits: { type: Number, default: 0, min: 0 },
     status: { type: String, enum: ['active', 'suspended'], default: 'active' },

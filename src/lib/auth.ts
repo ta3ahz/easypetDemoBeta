@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { cookies } from 'next/headers';
 import type { NextRequest } from 'next/server';
@@ -12,6 +13,15 @@ export async function hashSecret(secret: string): Promise<string> {
 }
 export async function verifySecret(secret: string, hash: string): Promise<boolean> {
   return bcrypt.compare(secret, hash);
+}
+
+// Device-side PIN verifier: the offline device can't run bcrypt, so alongside the
+// bcrypt pinHash we also store a salted SHA-256 the firmware can recompute with
+// mbedtls. Regenerate this whenever the PIN changes so device syncs stay current.
+export function pinVerifier(pin: string): { pinSalt: string; pinCheck: string } {
+  const pinSalt = crypto.randomBytes(8).toString('hex');
+  const pinCheck = crypto.createHash('sha256').update(pinSalt + pin).digest('hex');
+  return { pinSalt, pinCheck };
 }
 
 /* -------------------------------- JWT ------------------------------------ */

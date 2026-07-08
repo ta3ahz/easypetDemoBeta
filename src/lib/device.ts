@@ -59,6 +59,8 @@ export function clinicPublic(clinic: IClinic) {
     vets: clinic.vets,
     credits: clinic.credits,
     status: clinic.status,
+    pinSalt: clinic.pinSalt || '',    // device recomputes sha256(pinSalt+pin) to
+    pinCheck: clinic.pinCheck || '',  // validate the current PIN offline
   };
 }
 

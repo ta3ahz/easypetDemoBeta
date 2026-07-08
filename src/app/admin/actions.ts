@@ -2,7 +2,7 @@
 
 import crypto from 'crypto';
 import { revalidatePath } from 'next/cache';
-import { getSession, hashSecret } from '@/lib/auth';
+import { getSession, hashSecret, pinVerifier } from '@/lib/auth';
 import { dbConnect } from '@/lib/db';
 import { Clinic, Device, RedeemCode } from '@/models';
 import { applyCredits } from '@/lib/device';
@@ -25,7 +25,7 @@ export async function createClinic(formData: FormData) {
   if (name.length < 2 || !/^\d{6}$/.test(pin)) return;
   await dbConnect();
   if (await Clinic.findOne({ name })) return;               // name taken
-  const clinic = await Clinic.create({ name, pinHash: await hashSecret(pin), vets, credits: 0 });
+  const clinic = await Clinic.create({ name, pinHash: await hashSecret(pin), ...pinVerifier(pin), vets, credits: 0 });
   if (credits > 0) await applyCredits(String(clinic._id), credits, 'admin_grant');
   await logAudit(admin.email, 'create_clinic', name, `created with ${credits} credits`);
   revalidatePath('/admin/clinics');
@@ -55,6 +55,9 @@ export async function resetClinicPin(formData: FormData) {
   const clinic = await Clinic.findById(clinicId);
   if (!clinic) return;
   clinic.pinHash = await hashSecret(pin);
+  const v = pinVerifier(pin);
+  clinic.pinSalt = v.pinSalt;
+  clinic.pinCheck = v.pinCheck;
   await clinic.save();
   await logAudit(admin.email, 'reset_pin', clinic.name, 'PIN reset');
   revalidatePath('/admin/clinics');

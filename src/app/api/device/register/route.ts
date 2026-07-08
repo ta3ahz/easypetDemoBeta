@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbConnect } from '@/lib/db';
 import { Clinic, Device } from '@/models';
-import { hashSecret, verifySecret } from '@/lib/auth';
+import { hashSecret, verifySecret, pinVerifier } from '@/lib/auth';
 import { registerSchema, clinicPublic, issueDeviceToken, applyCredits } from '@/lib/device';
 
 // POST /api/device/register  { uid, clinicName, pin, vets?, fw? }
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   } else {
     // New account.
     const pinHash = await hashSecret(pin);
-    clinic = await Clinic.create({ name: clinicName, pinHash, vets: vets ?? [], credits: 0 });
+    clinic = await Clinic.create({ name: clinicName, pinHash, ...pinVerifier(pin), vets: vets ?? [], credits: 0 });
     const bonus = Number(process.env.STARTER_CREDITS ?? 10);
     if (bonus > 0) await applyCredits(String(clinic._id), bonus, 'signup_bonus');
     clinic = await Clinic.findById(clinic._id);

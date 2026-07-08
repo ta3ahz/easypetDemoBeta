@@ -1,6 +1,6 @@
 'use server';
 
-import { getSession, hashSecret, verifySecret } from '@/lib/auth';
+import { getSession, hashSecret, verifySecret, pinVerifier } from '@/lib/auth';
 import { dbConnect } from '@/lib/db';
 import { Clinic } from '@/models';
 import { logAudit } from '@/lib/audit';
@@ -34,6 +34,9 @@ export async function changeOwnPin(_prev: SettingsState, formData: FormData): Pr
   const clinic = await Clinic.findById(s.sub);
   if (!clinic || !(await verifySecret(current, clinic.pinHash))) return { error: 'Current PIN is wrong.' };
   clinic.pinHash = await hashSecret(next);
+  const v = pinVerifier(next);
+  clinic.pinSalt = v.pinSalt;
+  clinic.pinCheck = v.pinCheck;
   await clinic.save();
   await logAudit(s.name, 'change_pin', s.name, 'self-service PIN change');
   return { ok: 'PIN changed.' };
