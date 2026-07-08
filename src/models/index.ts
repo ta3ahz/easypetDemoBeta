@@ -135,7 +135,7 @@ export interface ICreditTx {
   _id: Types.ObjectId;
   clinic: Types.ObjectId;
   delta: number;              // +grant / -consume
-  reason: 'admin_grant' | 'redeem' | 'test_consume' | 'signup_bonus';
+  reason: 'admin_grant' | 'redeem' | 'test_consume' | 'signup_bonus' | 'test_dedupe_refund';
   meta?: Record<string, unknown>;
   createdAt: Date;
 }
@@ -145,7 +145,7 @@ const CreditTxSchema = new Schema<ICreditTx>(
     delta: { type: Number, required: true },
     reason: {
       type: String,
-      enum: ['admin_grant', 'redeem', 'test_consume', 'signup_bonus'],
+      enum: ['admin_grant', 'redeem', 'test_consume', 'signup_bonus', 'test_dedupe_refund'],
       required: true,
     },
     meta: { type: Schema.Types.Mixed },

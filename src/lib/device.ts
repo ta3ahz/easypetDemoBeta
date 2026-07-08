@@ -78,7 +78,7 @@ export function issueDeviceToken(device: IDevice, clinic: IClinic) {
 export async function applyCredits(
   clinicId: string,
   delta: number,
-  reason: 'admin_grant' | 'redeem' | 'test_consume' | 'signup_bonus',
+  reason: 'admin_grant' | 'redeem' | 'test_consume' | 'signup_bonus' | 'test_dedupe_refund',
   meta?: Record<string, unknown>
 ): Promise<number | null> {
   const filter = delta < 0 ? { _id: clinicId, credits: { $gte: -delta } } : { _id: clinicId };
