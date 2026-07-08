@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import { revalidatePath } from 'next/cache';
 import { getSession } from '@/lib/auth';
 import { dbConnect } from '@/lib/db';
-import { Clinic, RedeemCode } from '@/models';
+import { Clinic, Device, RedeemCode } from '@/models';
 import { applyCredits } from '@/lib/device';
 
 async function requireAdmin() {
@@ -30,6 +30,19 @@ export async function toggleClinicStatus(formData: FormData) {
   if (!clinic) return;
   clinic.status = clinic.status === 'active' ? 'suspended' : 'active';
   await clinic.save();
+  revalidatePath('/admin');
+}
+
+export async function updateDeviceConfig(formData: FormData) {
+  await requireAdmin();
+  const deviceId = String(formData.get('deviceId') || '');
+  const i0 = Number(formData.get('i0'));
+  const a = Number(formData.get('a'));
+  const b = Number(formData.get('b'));
+  const ths = Number(formData.get('ths'));
+  if (!deviceId || [i0, a, b, ths].some((n) => !Number.isFinite(n))) return;
+  await dbConnect();
+  await Device.updateOne({ _id: deviceId }, { $set: { config: { i0, a, b, ths } } });
   revalidatePath('/admin');
 }
 

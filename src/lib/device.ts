@@ -26,6 +26,7 @@ export const loginSchema = z.object({
 // omitted (avoids zod nested-default typing quirks).
 export const testSchema = z.object({
   vet: z.string().max(40).optional(),
+  raw: z.number().positive().optional(),             // photometer reading; backend computes result
   patient: z
     .object({
       name: z.string().max(60).optional(),

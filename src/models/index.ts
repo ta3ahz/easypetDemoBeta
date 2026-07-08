@@ -34,11 +34,20 @@ const ClinicSchema = new Schema<IClinic>(
 );
 
 /* ------------------------------- Device ---------------------------------- */
+// Per-device photometer calibration: concentration = log10(i0/raw)*a + b,
+// positive if concentration > ths.
+export interface IDeviceConfig {
+  i0: number;
+  a: number;
+  b: number;
+  ths: number;
+}
 export interface IDevice {
   _id: Types.ObjectId;
   uid: string;                // eFuse MAC (12 hex chars), unique per chip
   clinic: Types.ObjectId;
   fw: string;
+  config: IDeviceConfig;
   lastSeenAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -48,6 +57,12 @@ const DeviceSchema = new Schema<IDevice>(
     uid: { type: String, required: true, unique: true, uppercase: true, trim: true },
     clinic: { type: Schema.Types.ObjectId, ref: 'Clinic', required: true },
     fw: { type: String, default: '' },
+    config: {
+      i0: { type: Number, default: 10000 },
+      a: { type: Number, default: 1 },
+      b: { type: Number, default: 0 },
+      ths: { type: Number, default: 1 },
+    },
     lastSeenAt: { type: Date, default: Date.now },
   },
   { timestamps: true }
@@ -67,9 +82,10 @@ export interface ITest {
     age: string;
     weight: string;
   };
+  raw: number | null;         // photometer raw reading (from UART "2")
   result: {
     positive: boolean;
-    value: number | null;     // biomarker reading (optional)
+    value: number | null;     // computed concentration
   };
   startedAt: Date | null;
   finishedAt: Date | null;
@@ -89,6 +105,7 @@ const TestSchema = new Schema<ITest>(
       age: { type: String, default: '' },
       weight: { type: String, default: '' },
     },
+    raw: { type: Number, default: null },
     result: {
       positive: { type: Boolean, default: false },
       value: { type: Number, default: null },

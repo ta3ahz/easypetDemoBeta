@@ -4,7 +4,7 @@ import { dbConnect } from '@/lib/db';
 import { Clinic, Device, Test, RedeemCode } from '@/models';
 import { PanelHeader, Stat } from '@/components/PanelHeader';
 import { fmtDateTime } from '@/lib/format';
-import { grantCredits, toggleClinicStatus, generateCode } from './actions';
+import { grantCredits, toggleClinicStatus, generateCode, updateDeviceConfig } from './actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,12 +17,13 @@ export default async function AdminPage() {
   const clinics = await Clinic.find().sort({ createdAt: -1 }).lean();
   const clinicIds = clinics.map((c) => c._id);
 
-  const [devAgg, testAgg, tests, codes, totalTests] = await Promise.all([
+  const [devAgg, testAgg, tests, codes, totalTests, devices] = await Promise.all([
     Device.aggregate([{ $match: { clinic: { $in: clinicIds } } }, { $group: { _id: '$clinic', n: { $sum: 1 } } }]),
     Test.aggregate([{ $match: { clinic: { $in: clinicIds } } }, { $group: { _id: '$clinic', n: { $sum: 1 } } }]),
     Test.find().sort({ createdAt: -1 }).limit(50).populate('clinic', 'name').lean(),
     RedeemCode.find().sort({ createdAt: -1 }).limit(20).lean(),
     Test.countDocuments(),
+    Device.find().sort({ lastSeenAt: -1 }).limit(30).populate('clinic', 'name').lean(),
   ]);
   const devMap = new Map(devAgg.map((d) => [String(d._id), d.n]));
   const testMap = new Map(testAgg.map((d) => [String(d._id), d.n]));
@@ -101,6 +102,39 @@ export default async function AdminPage() {
           </div>
         </section>
 
+        {/* Devices — per-device calibration */}
+        <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+          <div className="px-5 py-3 border-b border-slate-100 font-semibold text-slate-700">
+            Devices · calibration <span className="font-normal text-slate-400">— concentration = log₁₀(i0/raw)·a + b, positive if &gt; ths</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-slate-500 text-left">
+                <tr><Th>Device (UID)</Th><Th>Clinic</Th><Th>Calibration</Th></tr>
+              </thead>
+              <tbody>
+                {devices.map((d) => (
+                  <tr key={String(d._id)} className="border-t border-slate-100">
+                    <Td className="font-mono text-slate-800">{d.uid}</Td>
+                    <Td>{(d.clinic as unknown as { name?: string })?.name ?? '—'}</Td>
+                    <Td>
+                      <form action={updateDeviceConfig} className="flex gap-2 items-center flex-wrap">
+                        <input type="hidden" name="deviceId" value={String(d._id)} />
+                        <CfgInput name="i0" v={d.config?.i0} />
+                        <CfgInput name="a" v={d.config?.a} />
+                        <CfgInput name="b" v={d.config?.b} />
+                        <CfgInput name="ths" v={d.config?.ths} />
+                        <button className="rounded-lg bg-blue-600 text-white px-3 py-1 text-xs font-semibold hover:bg-blue-700">Save</button>
+                      </form>
+                    </Td>
+                  </tr>
+                ))}
+                {devices.length === 0 && <tr><Td>No devices yet.</Td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
         {/* All tests */}
         <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
           <div className="px-5 py-3 border-b border-slate-100 font-semibold text-slate-700">Recent tests (all clinics)</div>
@@ -130,6 +164,20 @@ export default async function AdminPage() {
   );
 }
 
+function CfgInput({ name, v }: { name: string; v?: number }) {
+  return (
+    <label className="flex items-center gap-1 text-xs text-slate-500">
+      <span className="font-mono">{name}</span>
+      <input
+        name={name}
+        type="number"
+        step="any"
+        defaultValue={v ?? 0}
+        className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-slate-800"
+      />
+    </label>
+  );
+}
 function Th({ children }: { children: React.ReactNode }) {
   return <th className="px-4 py-2 font-semibold">{children}</th>;
 }
