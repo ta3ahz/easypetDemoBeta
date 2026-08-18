@@ -26,7 +26,7 @@ export function SettingsClient({ deviceName, uid, hasWeb }: { deviceName: string
         {hasWeb ? (
           <form action={pwAction} className="space-y-3">
             <input name="current" type="password" placeholder="Current password" className={inputCls} />
-            <input name="next" type="password" placeholder="New password (min 6)" className={inputCls} />
+            <input name="next" type="password" placeholder="New password (min 8)" className={inputCls} />
             {pwState.error && <Msg tone="err">{pwState.error}</Msg>}
             {pwState.ok && <Msg tone="ok">{pwState.ok}</Msg>}
             <Submit pending={pwPending}>Change password</Submit>

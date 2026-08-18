@@ -18,7 +18,7 @@ export const setupSchema = z.object({
   pin: pinSchema.optional(),
   vets: z.array(z.string().trim().max(40)).max(3).optional(),
   webUser: z.string().trim().min(3).max(40).optional(),
-  webPass: z.string().min(6).max(72).optional(),
+  webPass: z.string().min(8).max(72).optional(),   // web-panel password: min 8 chars
   clearWeb: z.boolean().optional(),   // true = remove web credentials
 });
 
@@ -58,6 +58,7 @@ export function devicePublic(device: IDevice) {
     config: device.config,
     pinSalt: device.pinSalt || '',   // device recomputes sha256(pinSalt+pin) to
     pinCheck: device.pinCheck || '', // validate the current PIN offline
+    webUser: device.webUser || '',   // web-panel username (not secret; lets the device prefill it)
     hasWeb: !!device.webUser,        // whether web credentials are set
   };
 }

@@ -19,7 +19,7 @@ export async function changeWebPassword(_prev: SettingsState, formData: FormData
   const s = await requireOwner();
   const current = String(formData.get('current') || '');
   const next = String(formData.get('next') || '');
-  if (next.length < 6) return { error: 'New password must be at least 6 characters.' };
+  if (next.length < 8) return { error: 'New password must be at least 8 characters.' };
   await dbConnect();
   const device = await Device.findById(s.sub);
   if (!device || !device.webPassHash) return { error: 'No web password set.' };
