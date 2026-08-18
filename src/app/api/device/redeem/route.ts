@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbConnect } from '@/lib/db';
-import { RedeemCode } from '@/models';
+import { Device, RedeemCode } from '@/models';
 import { getDeviceToken } from '@/lib/auth';
 import { redeemSchema, applyCredits } from '@/lib/device';
 
-// POST /api/device/redeem   (Authorization: Bearer <device token>)  { code }
-// The device "Add tests" screen posts a code; a valid unused code grants credits.
+// POST /api/device/redeem   (Authorization: Bearer <device token>)   { code }
+// Redeem a one-time code for test credits ("Add tests").
 export async function POST(req: NextRequest) {
   const tok = getDeviceToken(req);
   if (!tok) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
@@ -15,15 +15,17 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: 'invalid code' }, { status: 400 });
 
   await dbConnect();
+  const device = await Device.findById(tok.sub);
+  if (!device) return NextResponse.json({ error: 'device not found' }, { status: 404 });
 
-  // Atomically claim the code so it can't be redeemed twice.
-  const claimed = await RedeemCode.findOneAndUpdate(
-    { code: parsed.data.code, usedBy: null },
-    { usedBy: tok.clinic, usedAt: new Date() },
+  // Atomically claim the code (only if unused).
+  const code = await RedeemCode.findOneAndUpdate(
+    { code: parsed.data.code, usedByDevice: null },
+    { usedByDevice: device._id, usedAt: new Date() },
     { new: true }
   );
-  if (!claimed) return NextResponse.json({ error: 'code invalid or already used' }, { status: 400 });
+  if (!code) return NextResponse.json({ error: 'invalid or already-used code' }, { status: 400 });
 
-  const balance = await applyCredits(tok.clinic, claimed.credits, 'redeem', { code: claimed.code });
-  return NextResponse.json({ added: claimed.credits, credits: balance });
+  const balance = await applyCredits(String(device._id), code.credits, 'redeem');
+  return NextResponse.json({ credits: balance ?? device.credits, added: code.credits });
 }

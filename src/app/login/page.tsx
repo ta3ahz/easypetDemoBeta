@@ -1,13 +1,13 @@
 'use client';
 
 import { useActionState, useState } from 'react';
-import { clinicLogin, adminLogin, type LoginState } from './actions';
+import { ownerLogin, adminLogin, type LoginState } from './actions';
 
 const empty: LoginState = {};
 
 export default function LoginPage() {
-  const [tab, setTab] = useState<'clinic' | 'admin'>('clinic');
-  const [clinicState, clinicAction, clinicPending] = useActionState(clinicLogin, empty);
+  const [tab, setTab] = useState<'owner' | 'admin'>('owner');
+  const [ownerState, ownerAction, ownerPending] = useActionState(ownerLogin, empty);
   const [adminState, adminAction, adminPending] = useActionState(adminLogin, empty);
 
   return (
@@ -26,7 +26,7 @@ export default function LoginPage() {
 
         <div className="bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
           <div className="grid grid-cols-2 text-sm font-semibold">
-            {(['clinic', 'admin'] as const).map((t) => (
+            {(['owner', 'admin'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -34,22 +34,25 @@ export default function LoginPage() {
                   tab === t ? 'bg-white text-blue-600' : 'bg-slate-50 text-slate-400 hover:text-slate-600'
                 }`}
               >
-                {t === 'clinic' ? 'Clinic' : 'Admin'}
+                {t === 'owner' ? 'Clinic' : 'Admin'}
               </button>
             ))}
           </div>
 
           <div className="p-6">
-            {tab === 'clinic' ? (
-              <form action={clinicAction} className="space-y-4">
-                <Field label="Clinic name" name="name" placeholder="Manisa Vet Lab" autoFocus />
-                <Field label="PIN (6 digits)" name="pin" type="password" inputMode="numeric" maxLength={6} placeholder="••••••" />
-                {clinicState.error && <Error msg={clinicState.error} />}
-                <Submit pending={clinicPending}>Sign in</Submit>
+            {tab === 'owner' ? (
+              <form action={ownerAction} className="space-y-4">
+                <Field label="Username" name="user" placeholder="clinic username" autoFocus />
+                <Field label="Password" name="password" type="password" placeholder="••••••••" />
+                {ownerState.error && <Error msg={ownerState.error} />}
+                <Submit pending={ownerPending}>Sign in</Submit>
+                <p className="text-xs text-slate-400">
+                  Set your username &amp; password on the device (Settings) to access it here.
+                </p>
               </form>
             ) : (
               <form action={adminAction} className="space-y-4">
-                <Field label="Email" name="email" type="email" placeholder="admin@easypet.local" autoFocus />
+                <Field label="Email" name="email" type="email" placeholder="admin@uribx.io" autoFocus />
                 <Field label="Password" name="password" type="password" placeholder="••••••••" />
                 {adminState.error && <Error msg={adminState.error} />}
                 <Submit pending={adminPending}>Sign in</Submit>

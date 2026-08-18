@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbConnect } from '@/lib/db';
-import { Clinic, Device, Test } from '@/models';
+import { Device, Test } from '@/models';
 import { getDeviceToken } from '@/lib/auth';
 import { testSchema, applyCredits } from '@/lib/device';
 
 // POST /api/device/tests   (Authorization: Bearer <device token>)
-//   { vet, patient, raw, startedAt, finishedAt }
-// The device sends the photometer's raw reading; the backend computes the
-// concentration and positive/negative result using this device's calibration:
-//   concentration = log10(i0 / raw) * a + b ,   positive = concentration > ths
-// The test (patient + raw + result) is saved and one credit is consumed.
+//   { vet, patient, raw, temp, startedAt, finishedAt, clientId }
+// The device sends the photometer's raw reading; the backend computes the result
+// from this device's calibration:
+//   concentration = log10(i0 / raw) * a + b ,  positive = concentration > ths
+// The test is stored against the device and one credit is consumed. A clientId
+// makes retried offline uploads idempotent (no double record / double charge).
 export async function POST(req: NextRequest) {
   const tok = getDeviceToken(req);
   if (!tok) return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
@@ -21,14 +22,10 @@ export async function POST(req: NextRequest) {
   }
 
   await dbConnect();
-  const [clinic, device] = await Promise.all([
-    Clinic.findById(tok.clinic),
-    Device.findById(tok.sub),
-  ]);
-  if (!clinic || !device) return NextResponse.json({ error: 'not found' }, { status: 404 });
+  const device = await Device.findById(tok.sub);
+  if (!device) return NextResponse.json({ error: 'device not found' }, { status: 404 });
 
-  // Idempotency: an offline device may retry an upload it already delivered. If
-  // this (device, clientId) is already stored, return it without re-charging.
+  // Idempotency: an offline device may retry an upload it already delivered.
   const clientId = parsed.data.clientId ?? null;
   if (clientId) {
     const dup = await Test.findOne({ device: device._id, clientId }).lean();
@@ -38,33 +35,28 @@ export async function POST(req: NextRequest) {
         positive: dup.result?.positive ?? false,
         concentration: dup.result?.value ?? null,
         creditsUsed: dup.creditsUsed ?? 0,
-        credits: clinic.credits,
+        credits: device.credits,
         duplicate: true,
       });
     }
   }
 
-  // Compute concentration + result from the raw reading using the device config.
-  // The device computes the same thing offline; the backend re-derives it here so
-  // the stored record always reflects the authoritative calibration.
   const { i0, a, b, ths } = device.config;
   const raw = parsed.data.raw ?? null;
   let concentration: number | null = null;
-  let positive = parsed.data.result?.positive ?? false;   // fallback if no raw sent
+  let positive = parsed.data.result?.positive ?? false;
   if (raw && raw > 0) {
     concentration = Math.log10(i0 / raw) * a + b;
     positive = concentration > ths;
   }
 
-  // Consume a credit if any remain; the test is recorded either way.
-  const balance = await applyCredits(String(clinic._id), -1, 'test_consume');
+  const balance = await applyCredits(String(device._id), -1, 'test_consume');
   const creditsUsed = balance === null ? 0 : 1;
 
   let test;
   try {
     test = await Test.create({
       device: device._id,
-      clinic: clinic._id,
       vet: parsed.data.vet ?? '',
       patient: parsed.data.patient ?? {},
       raw,
@@ -76,10 +68,9 @@ export async function POST(req: NextRequest) {
       clientId,
     });
   } catch (err: unknown) {
-    // Lost the race against a concurrent identical upload: refund the credit we
-    // just consumed and return the already-stored record.
+    // Lost the race against a concurrent identical upload: refund + return it.
     if (clientId && (err as { code?: number }).code === 11000) {
-      if (balance !== null) await applyCredits(String(clinic._id), 1, 'test_dedupe_refund');
+      if (balance !== null) await applyCredits(String(device._id), 1, 'test_dedupe_refund');
       const dup = await Test.findOne({ device: device._id, clientId }).lean();
       if (dup) {
         return NextResponse.json({
@@ -87,7 +78,7 @@ export async function POST(req: NextRequest) {
           positive: dup.result?.positive ?? false,
           concentration: dup.result?.value ?? null,
           creditsUsed: dup.creditsUsed ?? 0,
-          credits: clinic.credits,
+          credits: device.credits,
           duplicate: true,
         });
       }
@@ -101,6 +92,6 @@ export async function POST(req: NextRequest) {
     positive,
     concentration,
     creditsUsed,
-    credits: balance === null ? clinic.credits : balance,
+    credits: balance === null ? device.credits : balance,
   });
 }

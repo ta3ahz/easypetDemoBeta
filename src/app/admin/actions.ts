@@ -2,9 +2,9 @@
 
 import crypto from 'crypto';
 import { revalidatePath } from 'next/cache';
-import { getSession, hashSecret, pinVerifier } from '@/lib/auth';
+import { getSession, pinVerifier } from '@/lib/auth';
 import { dbConnect } from '@/lib/db';
-import { Clinic, Device, RedeemCode } from '@/models';
+import { Device, RedeemCode } from '@/models';
 import { applyCredits } from '@/lib/device';
 import { logAudit } from '@/lib/audit';
 
@@ -14,80 +14,21 @@ async function requireAdmin() {
   return s;
 }
 
-/* ------------------------------- clinics --------------------------------- */
-export async function createClinic(formData: FormData) {
+/* ------------------------------- devices --------------------------------- */
+export async function setDeviceCredits(formData: FormData) {
   const admin = await requireAdmin();
-  const name = String(formData.get('name') || '').trim();
-  const pin = String(formData.get('pin') || '').trim();
-  const credits = Math.max(0, Math.trunc(Number(formData.get('credits') || 0)));
-  const vets = String(formData.get('vets') || '')
-    .split(',').map((v) => v.trim()).filter(Boolean).slice(0, 3);
-  if (name.length < 2 || !/^\d{6}$/.test(pin)) return;
-  await dbConnect();
-  if (await Clinic.findOne({ name })) return;               // name taken
-  const clinic = await Clinic.create({ name, pinHash: await hashSecret(pin), ...pinVerifier(pin), vets, credits: 0 });
-  if (credits > 0) await applyCredits(String(clinic._id), credits, 'admin_grant');
-  await logAudit(admin.email, 'create_clinic', name, `created with ${credits} credits`);
-  revalidatePath('/admin/clinics');
-}
-
-export async function setCredits(formData: FormData) {
-  const admin = await requireAdmin();
-  const clinicId = String(formData.get('clinicId') || '');
+  const deviceId = String(formData.get('deviceId') || '');
   const value = Math.max(0, Math.trunc(Number(formData.get('credits') || 0)));
-  if (!clinicId || !Number.isFinite(value)) return;
+  if (!deviceId || !Number.isFinite(value)) return;
   await dbConnect();
-  const clinic = await Clinic.findById(clinicId);
-  if (!clinic) return;
-  const delta = value - clinic.credits;
-  if (delta !== 0) await applyCredits(clinicId, delta, 'admin_grant');
-  await logAudit(admin.email, 'set_credits', clinic.name, `set to ${value} (Δ${delta})`);
-  revalidatePath('/admin/clinics');
+  const device = await Device.findById(deviceId);
+  if (!device) return;
+  const delta = value - device.credits;
+  if (delta !== 0) await applyCredits(deviceId, delta, 'admin_grant');
+  await logAudit(admin.email, 'set_credits', device.name || device.uid, `set to ${value} (Δ${delta})`);
   revalidatePath('/admin/devices');
 }
 
-export async function resetClinicPin(formData: FormData) {
-  const admin = await requireAdmin();
-  const clinicId = String(formData.get('clinicId') || '');
-  const pin = String(formData.get('pin') || '').trim();
-  if (!clinicId || !/^\d{6}$/.test(pin)) return;
-  await dbConnect();
-  const clinic = await Clinic.findById(clinicId);
-  if (!clinic) return;
-  clinic.pinHash = await hashSecret(pin);
-  const v = pinVerifier(pin);
-  clinic.pinSalt = v.pinSalt;
-  clinic.pinCheck = v.pinCheck;
-  await clinic.save();
-  await logAudit(admin.email, 'reset_pin', clinic.name, 'PIN reset');
-  revalidatePath('/admin/clinics');
-}
-
-export async function updateClinicVets(formData: FormData) {
-  const admin = await requireAdmin();
-  const clinicId = String(formData.get('clinicId') || '');
-  const vets = String(formData.get('vets') || '')
-    .split(',').map((v) => v.trim()).filter(Boolean).slice(0, 3);
-  if (!clinicId) return;
-  await dbConnect();
-  const clinic = await Clinic.findByIdAndUpdate(clinicId, { vets });
-  await logAudit(admin.email, 'update_vets', clinic?.name ?? '', vets.join(', '));
-  revalidatePath('/admin/clinics');
-}
-
-export async function toggleClinicStatus(formData: FormData) {
-  const admin = await requireAdmin();
-  const clinicId = String(formData.get('clinicId') || '');
-  await dbConnect();
-  const clinic = await Clinic.findById(clinicId);
-  if (!clinic) return;
-  clinic.status = clinic.status === 'active' ? 'suspended' : 'active';
-  await clinic.save();
-  await logAudit(admin.email, 'toggle_status', clinic.name, clinic.status);
-  revalidatePath('/admin/clinics');
-}
-
-/* ------------------------------- devices --------------------------------- */
 export async function updateDeviceConfig(formData: FormData) {
   const admin = await requireAdmin();
   const deviceId = String(formData.get('deviceId') || '');
@@ -102,6 +43,47 @@ export async function updateDeviceConfig(formData: FormData) {
   revalidatePath('/admin/devices');
 }
 
+// Admin resets the device's touchscreen PIN. The new verifier syncs to the device
+// on its next /sync (online recovery path for a forgotten PIN).
+export async function resetDevicePin(formData: FormData) {
+  const admin = await requireAdmin();
+  const deviceId = String(formData.get('deviceId') || '');
+  const pin = String(formData.get('pin') || '').trim();
+  if (!deviceId || !/^\d{4,6}$/.test(pin)) return;
+  await dbConnect();
+  const device = await Device.findById(deviceId);
+  if (!device) return;
+  const v = pinVerifier(pin);
+  device.pinSalt = v.pinSalt;
+  device.pinCheck = v.pinCheck;
+  await device.save();
+  await logAudit(admin.email, 'reset_pin', device.name || device.uid, 'PIN reset (syncs to device)');
+  revalidatePath('/admin/devices');
+}
+
+export async function renameDevice(formData: FormData) {
+  const admin = await requireAdmin();
+  const deviceId = String(formData.get('deviceId') || '');
+  const name = String(formData.get('name') || '').trim().slice(0, 60);
+  if (!deviceId) return;
+  await dbConnect();
+  const device = await Device.findByIdAndUpdate(deviceId, { name });
+  await logAudit(admin.email, 'rename_device', device?.uid ?? '', name);
+  revalidatePath('/admin/devices');
+}
+
+export async function toggleDeviceStatus(formData: FormData) {
+  const admin = await requireAdmin();
+  const deviceId = String(formData.get('deviceId') || '');
+  await dbConnect();
+  const device = await Device.findById(deviceId);
+  if (!device) return;
+  device.status = device.status === 'suspended' ? 'active' : 'suspended';
+  await device.save();
+  await logAudit(admin.email, 'toggle_status', device.name || device.uid, device.status);
+  revalidatePath('/admin/devices');
+}
+
 export async function deleteDevice(formData: FormData) {
   const admin = await requireAdmin();
   const deviceId = String(formData.get('deviceId') || '');
@@ -109,21 +91,6 @@ export async function deleteDevice(formData: FormData) {
   await dbConnect();
   const device = await Device.findByIdAndDelete(deviceId);   // measurements are kept for records
   await logAudit(admin.email, 'delete_device', device?.uid ?? deviceId, 'device removed');
-  revalidatePath('/admin/devices');
-}
-
-// Directly set the owning clinic's credit balance from the Devices tab.
-export async function setDeviceCredits(formData: FormData) {
-  const admin = await requireAdmin();
-  const clinicId = String(formData.get('clinicId') || '');
-  const value = Math.max(0, Math.trunc(Number(formData.get('credits') || 0)));
-  if (!clinicId) return;
-  await dbConnect();
-  const clinic = await Clinic.findById(clinicId);
-  if (!clinic) return;
-  const delta = value - clinic.credits;
-  if (delta !== 0) await applyCredits(clinicId, delta, 'admin_grant');
-  await logAudit(admin.email, 'set_credits', clinic.name, `set to ${value} (from devices)`);
   revalidatePath('/admin/devices');
 }
 

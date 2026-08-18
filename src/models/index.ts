@@ -1,41 +1,17 @@
 import mongoose, { Schema, model, models, Types } from 'mongoose';
 
 /* ----------------------------------------------------------------------------
- * easyPET data model (MongoDB / Mongoose)
+ * uriBX data model — DEVICE-CENTRIC (MongoDB / Mongoose)
  *
- *  Clinic      = the account (username = clinic name, password = 6-digit PIN)
- *  Device      = a physical CrowPanel unit, keyed by its eFuse MAC (uid)
- *  Test        = one measurement a device performed (patient + result)
- *  CreditTx    = ledger of test-credit changes (admin grant / redeem / consume)
- *  Admin       = back-office login (email + password)
- *  RedeemCode  = a code the device/clinic can redeem for credits ("Add tests")
+ *  Device  = the account. Keyed by its eFuse MAC (uid). Holds the display name,
+ *            the touchscreen PIN (offline-verifiable), OPTIONAL web credentials,
+ *            credits, calibration, and vet labels. There is no separate "clinic".
+ *  Test    = one measurement a device performed (patient + result).
+ *  CreditTx= ledger of a device's test-credit changes.
+ *  Admin   = back-office (fleet) login.
+ *  RedeemCode = a code redeemed for credits ("Add tests").
+ *  AuditLog= back-office action trail.
  * ------------------------------------------------------------------------- */
-
-/* ------------------------------- Clinic ---------------------------------- */
-export interface IClinic {
-  _id: Types.ObjectId;
-  name: string;               // unique username (clinic name)
-  pinHash: string;            // bcrypt hash of the 6-digit PIN (web login)
-  pinSalt: string;            // salt for the device-side SHA-256 PIN verifier
-  pinCheck: string;           // sha256(pinSalt + pin) — offline device verification
-  vets: string[];             // veterinarian names (max 3 on device)
-  credits: number;            // remaining test credits
-  status: 'active' | 'suspended';
-  createdAt: Date;
-  updatedAt: Date;
-}
-const ClinicSchema = new Schema<IClinic>(
-  {
-    name: { type: String, required: true, unique: true, trim: true },
-    pinHash: { type: String, required: true },
-    pinSalt: { type: String, default: '' },
-    pinCheck: { type: String, default: '' },
-    vets: { type: [String], default: [] },
-    credits: { type: Number, default: 0, min: 0 },
-    status: { type: String, enum: ['active', 'suspended'], default: 'active' },
-  },
-  { timestamps: true }
-);
 
 /* ------------------------------- Device ---------------------------------- */
 // Per-device photometer calibration: concentration = log10(i0/raw)*a + b,
@@ -48,10 +24,17 @@ export interface IDeviceConfig {
 }
 export interface IDevice {
   _id: Types.ObjectId;
-  uid: string;                // eFuse MAC (12 hex chars), unique per chip
-  clinic: Types.ObjectId;
+  uid: string;                 // eFuse MAC (12 hex), unique per chip — identity
+  name: string;                // display name (clinic/owner), set on the device
+  pinSalt: string;             // salt for the device-side SHA-256 PIN verifier
+  pinCheck: string;            // sha256(pinSalt + pin) — offline device unlock
+  webUser: string | null;      // OPTIONAL web-panel login username (set on device)
+  webPassHash: string | null;  // OPTIONAL web-panel password (bcrypt, server-side)
+  credits: number;             // remaining test credits (admin-controlled)
+  config: IDeviceConfig;       // calibration (admin-set)
+  vets: string[];              // optional veterinarian names for labelling tests
+  status: 'new' | 'active' | 'suspended'; // new = auto-registered, not set up yet
   fw: string;
-  config: IDeviceConfig;
   lastSeenAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -59,49 +42,59 @@ export interface IDevice {
 const DeviceSchema = new Schema<IDevice>(
   {
     uid: { type: String, required: true, unique: true, uppercase: true, trim: true },
-    clinic: { type: Schema.Types.ObjectId, ref: 'Clinic', required: true },
-    fw: { type: String, default: '' },
+    name: { type: String, default: '' },
+    pinSalt: { type: String, default: '' },
+    pinCheck: { type: String, default: '' },
+    webUser: { type: String, default: null, trim: true },
+    webPassHash: { type: String, default: null },
+    credits: { type: Number, default: 0, min: 0 },
     config: {
       i0: { type: Number, default: 10000 },
       a: { type: Number, default: 1 },
       b: { type: Number, default: 0 },
       ths: { type: Number, default: 1 },
     },
+    vets: { type: [String], default: [] },
+    status: { type: String, enum: ['new', 'active', 'suspended'], default: 'new' },
+    fw: { type: String, default: '' },
     lastSeenAt: { type: Date, default: Date.now },
   },
   { timestamps: true }
+);
+// Web login username is unique when present (sparse — many devices have none yet).
+DeviceSchema.index(
+  { webUser: 1 },
+  { unique: true, partialFilterExpression: { webUser: { $type: 'string' } } }
 );
 
 /* -------------------------------- Test ----------------------------------- */
 export interface ITest {
   _id: Types.ObjectId;
   device: Types.ObjectId;
-  clinic: Types.ObjectId;
   vet: string;
   patient: {
     name: string;
     owner: string;
-    species: string;          // 'cat' | 'dog'
-    sex: string;              // 'female' | 'male'
+    species: string;   // 'cat' | 'dog'
+    sex: string;       // 'female' | 'male'
     age: string;
     weight: string;
   };
-  raw: number | null;         // photometer raw reading (from UART "2")
-  temp: number | null;        // chamber temperature at measurement (°C)
+  raw: number | null;
+  temp: number | null;
   result: {
     positive: boolean;
-    value: number | null;     // computed concentration
+    value: number | null;   // computed concentration
   };
   startedAt: Date | null;
   finishedAt: Date | null;
   creditsUsed: number;
-  clientId: string | null;    // device-generated id; dedupes offline-queue re-uploads
+  clientId: string | null;  // device-generated id; dedupes offline re-uploads
   createdAt: Date;
 }
 const TestSchema = new Schema<ITest>(
   {
-    device: { type: Schema.Types.ObjectId, ref: 'Device', required: true },
-    clinic: { type: Schema.Types.ObjectId, ref: 'Clinic', required: true, index: true },
+    device: { type: Schema.Types.ObjectId, ref: 'Device', required: true, index: true },
     vet: { type: String, default: '' },
     patient: {
       name: { type: String, default: '' },
@@ -133,15 +126,15 @@ TestSchema.index(
 /* ------------------------------ CreditTx --------------------------------- */
 export interface ICreditTx {
   _id: Types.ObjectId;
-  clinic: Types.ObjectId;
-  delta: number;              // +grant / -consume
+  device: Types.ObjectId;
+  delta: number;
   reason: 'admin_grant' | 'redeem' | 'test_consume' | 'signup_bonus' | 'test_dedupe_refund';
-  meta?: Record<string, unknown>;
+  meta?: unknown;
   createdAt: Date;
 }
 const CreditTxSchema = new Schema<ICreditTx>(
   {
-    clinic: { type: Schema.Types.ObjectId, ref: 'Clinic', required: true, index: true },
+    device: { type: Schema.Types.ObjectId, ref: 'Device', required: true, index: true },
     delta: { type: Number, required: true },
     reason: {
       type: String,
@@ -153,13 +146,14 @@ const CreditTxSchema = new Schema<ICreditTx>(
   { timestamps: { createdAt: true, updatedAt: false } }
 );
 
-/* ------------------------------- Admin ----------------------------------- */
+/* -------------------------------- Admin ---------------------------------- */
 export interface IAdmin {
   _id: Types.ObjectId;
   email: string;
   passwordHash: string;
   name: string;
   createdAt: Date;
+  updatedAt: Date;
 }
 const AdminSchema = new Schema<IAdmin>(
   {
@@ -167,15 +161,15 @@ const AdminSchema = new Schema<IAdmin>(
     passwordHash: { type: String, required: true },
     name: { type: String, default: 'Admin' },
   },
-  { timestamps: { createdAt: true, updatedAt: false } }
+  { timestamps: true }
 );
 
-/* ----------------------------- RedeemCode -------------------------------- */
+/* ------------------------------ RedeemCode ------------------------------- */
 export interface IRedeemCode {
   _id: Types.ObjectId;
   code: string;
   credits: number;
-  usedBy: Types.ObjectId | null;
+  usedByDevice: Types.ObjectId | null;
   usedAt: Date | null;
   createdAt: Date;
 }
@@ -183,7 +177,7 @@ const RedeemCodeSchema = new Schema<IRedeemCode>(
   {
     code: { type: String, required: true, unique: true, uppercase: true, trim: true },
     credits: { type: Number, required: true, min: 1 },
-    usedBy: { type: Schema.Types.ObjectId, ref: 'Clinic', default: null },
+    usedByDevice: { type: Schema.Types.ObjectId, ref: 'Device', default: null },
     usedAt: { type: Date, default: null },
   },
   { timestamps: { createdAt: true, updatedAt: false } }
@@ -192,10 +186,10 @@ const RedeemCodeSchema = new Schema<IRedeemCode>(
 /* ------------------------------ AuditLog --------------------------------- */
 export interface IAuditLog {
   _id: Types.ObjectId;
-  actor: string;              // who did it (admin email / clinic name)
-  action: string;            // e.g. 'grant_credits', 'set_config', 'reset_pin'
-  target: string;            // what was affected (clinic/device label)
-  detail: string;            // human-readable summary
+  actor: string;
+  action: string;
+  target: string;
+  detail: string;
   createdAt: Date;
 }
 const AuditLogSchema = new Schema<IAuditLog>(
@@ -209,11 +203,9 @@ const AuditLogSchema = new Schema<IAuditLog>(
 );
 
 /* Guard against model recompilation on Next.js hot reload. */
-export const AuditLog =
-  (models.AuditLog as mongoose.Model<IAuditLog>) || model<IAuditLog>('AuditLog', AuditLogSchema);
-export const Clinic = (models.Clinic as mongoose.Model<IClinic>) || model<IClinic>('Clinic', ClinicSchema);
 export const Device = (models.Device as mongoose.Model<IDevice>) || model<IDevice>('Device', DeviceSchema);
 export const Test = (models.Test as mongoose.Model<ITest>) || model<ITest>('Test', TestSchema);
 export const CreditTx = (models.CreditTx as mongoose.Model<ICreditTx>) || model<ICreditTx>('CreditTx', CreditTxSchema);
 export const Admin = (models.Admin as mongoose.Model<IAdmin>) || model<IAdmin>('Admin', AdminSchema);
 export const RedeemCode = (models.RedeemCode as mongoose.Model<IRedeemCode>) || model<IRedeemCode>('RedeemCode', RedeemCodeSchema);
+export const AuditLog = (models.AuditLog as mongoose.Model<IAuditLog>) || model<IAuditLog>('AuditLog', AuditLogSchema);

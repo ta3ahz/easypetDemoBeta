@@ -1,73 +1,100 @@
 import { requireAdminPage } from '@/lib/guard';
 import { dbConnect } from '@/lib/db';
-import { Device } from '@/models';
+import { Device, Test } from '@/models';
+import { recoveryPin } from '@/lib/auth';
 import { PanelShell } from '@/components/PanelShell';
 import { ADMIN_NAV } from '@/components/nav';
-import { Section, TableWrap, Th, Td, Row, btn, input } from '@/components/ui';
+import { Section, TableWrap, Th, Td, Row, btn, input, Pill } from '@/components/ui';
 import { fmtDateTime } from '@/lib/format';
-import { updateDeviceConfig, setDeviceCredits, deleteDevice } from '../actions';
+import {
+  updateDeviceConfig, setDeviceCredits, resetDevicePin, renameDevice, toggleDeviceStatus, deleteDevice,
+} from '../actions';
 
 export const dynamic = 'force-dynamic';
-
-type PopClinic = { _id: string; name?: string; credits?: number };
 
 export default async function AdminDevices() {
   const admin = await requireAdminPage();
   await dbConnect();
-  const devices = await Device.find().sort({ lastSeenAt: -1 }).populate('clinic', 'name credits').lean();
+  const devices = await Device.find().sort({ lastSeenAt: -1 }).lean();
+  const testCounts = await Test.aggregate([{ $group: { _id: '$device', n: { $sum: 1 } } }]);
+  const counts = new Map(testCounts.map((t) => [String(t._id), t.n as number]));
 
   return (
     <PanelShell role="Admin" user={admin.email} nav={ADMIN_NAV} active="/admin/devices">
       <Section
         title="Devices"
-        subtitle="Per-device calibration + credits — concentration = log₁₀(i0/raw)·a + b, positive if > ths"
+        subtitle="Each device is an account (eFuse MAC). concentration = log₁₀(i0/raw)·a + b, positive if > ths"
       >
         <TableWrap>
           <thead className="bg-slate-50">
             <tr>
-              <Th>UID</Th><Th>Clinic</Th><Th>FW</Th><Th>Last seen</Th><Th>Credits (clinic)</Th><Th>Calibration</Th><Th>Actions</Th>
+              <Th>Name / UID</Th><Th>Status</Th><Th>Tests</Th><Th>Last seen</Th>
+              <Th>Credits</Th><Th>Calibration</Th><Th>PIN / Recovery</Th><Th>Actions</Th>
             </tr>
           </thead>
           <tbody>
             {devices.map((d) => {
-              const clinic = d.clinic as unknown as PopClinic | null;
+              const id = String(d._id);
               return (
-                <Row key={String(d._id)}>
-                  <Td className="font-mono text-slate-800">{d.uid}</Td>
-                  <Td>{clinic?.name ?? '—'}</Td>
-                  <Td>{d.fw || '—'}</Td>
-                  <Td>{fmtDateTime(d.lastSeenAt)}</Td>
+                <Row key={id}>
                   <Td>
-                    {clinic ? (
-                      <form action={setDeviceCredits} className="flex gap-1.5 items-center">
-                        <input type="hidden" name="clinicId" value={String(clinic._id)} />
-                        <input name="credits" type="number" defaultValue={clinic.credits ?? 0} className={`${input} w-20`} />
-                        <button className={btn}>Set</button>
-                      </form>
-                    ) : '—'}
+                    <form action={renameDevice} className="flex gap-1.5 items-center">
+                      <input type="hidden" name="deviceId" value={id} />
+                      <input name="name" defaultValue={d.name} placeholder="(unnamed)" className={`${input} w-36`} />
+                      <button className={btn} title="Rename">✓</button>
+                    </form>
+                    <div className="font-mono text-xs text-slate-400 mt-1">{d.uid}{d.webUser ? ` · web:${d.webUser}` : ''}</div>
                   </Td>
                   <Td>
-                    <form action={updateDeviceConfig} className="flex gap-2 items-center">
-                      <input type="hidden" name="deviceId" value={String(d._id)} />
-                      <Cfg name="i0" v={d.config?.i0} />
-                      <Cfg name="a" v={d.config?.a} />
-                      <Cfg name="b" v={d.config?.b} />
-                      <Cfg name="ths" v={d.config?.ths} />
+                    {d.status === 'active' ? <Pill tone="green">active</Pill>
+                      : d.status === 'suspended' ? <Pill tone="red">suspended</Pill>
+                      : <Pill>new</Pill>}
+                  </Td>
+                  <Td>{counts.get(id) ?? 0}</Td>
+                  <Td className="whitespace-nowrap">{fmtDateTime(d.lastSeenAt)}</Td>
+                  <Td>
+                    <form action={setDeviceCredits} className="flex gap-1.5 items-center">
+                      <input type="hidden" name="deviceId" value={id} />
+                      <input name="credits" type="number" defaultValue={d.credits ?? 0} className={`${input} w-20`} />
+                      <button className={btn}>Set</button>
+                    </form>
+                  </Td>
+                  <Td>
+                    <form action={updateDeviceConfig} className="flex gap-2 items-center flex-wrap">
+                      <input type="hidden" name="deviceId" value={id} />
+                      <Cfg name="i0" v={d.config?.i0} /><Cfg name="a" v={d.config?.a} />
+                      <Cfg name="b" v={d.config?.b} /><Cfg name="ths" v={d.config?.ths} />
                       <button className={btn}>Save</button>
                     </form>
                   </Td>
                   <Td>
-                    <form action={deleteDevice}>
-                      <input type="hidden" name="deviceId" value={String(d._id)} />
-                      <button className="rounded-lg border border-red-200 text-red-600 px-3 py-1.5 text-xs font-semibold hover:bg-red-50 transition-colors">
-                        Remove
-                      </button>
+                    <form action={resetDevicePin} className="flex gap-1.5 items-center">
+                      <input type="hidden" name="deviceId" value={id} />
+                      <input name="pin" placeholder="new PIN" inputMode="numeric" maxLength={6} className={`${input} w-24`} />
+                      <button className={btn}>Reset</button>
                     </form>
+                    <div className="text-xs text-slate-400 mt-1">recovery: <span className="font-mono text-slate-600">{recoveryPin(d.uid)}</span></div>
+                  </Td>
+                  <Td>
+                    <div className="flex gap-1.5">
+                      <form action={toggleDeviceStatus}>
+                        <input type="hidden" name="deviceId" value={id} />
+                        <button className="rounded-lg border border-slate-200 text-slate-600 px-3 py-1.5 text-xs font-semibold hover:bg-slate-50">
+                          {d.status === 'suspended' ? 'Activate' : 'Suspend'}
+                        </button>
+                      </form>
+                      <form action={deleteDevice}>
+                        <input type="hidden" name="deviceId" value={id} />
+                        <button className="rounded-lg border border-red-200 text-red-600 px-3 py-1.5 text-xs font-semibold hover:bg-red-50">
+                          Remove
+                        </button>
+                      </form>
+                    </div>
                   </Td>
                 </Row>
               );
             })}
-            {devices.length === 0 && <Row><Td>No devices yet.</Td></Row>}
+            {devices.length === 0 && <Row><Td>No devices yet. They appear here when first powered on online.</Td></Row>}
           </tbody>
         </TableWrap>
       </Section>
@@ -79,7 +106,7 @@ function Cfg({ name, v }: { name: string; v?: number }) {
   return (
     <label className="flex items-center gap-1 text-xs text-slate-500">
       <span className="font-mono">{name}</span>
-      <input name={name} type="number" step="any" defaultValue={v ?? 0} className={`${input} w-20`} />
+      <input name={name} type="number" step="any" defaultValue={v ?? 0} className={`${input} w-16`} />
     </label>
   );
 }

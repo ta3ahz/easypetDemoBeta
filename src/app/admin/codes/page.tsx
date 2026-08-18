@@ -12,8 +12,8 @@ export const dynamic = 'force-dynamic';
 export default async function AdminCodes() {
   const admin = await requireAdminPage();
   await dbConnect();
-  const codes = await RedeemCode.find().sort({ createdAt: -1 }).limit(100).populate('usedBy', 'name').lean();
-  const unused = codes.filter((c) => !c.usedBy).length;
+  const codes = await RedeemCode.find().sort({ createdAt: -1 }).limit(100).populate('usedByDevice', 'name uid').lean();
+  const unused = codes.filter((c) => !c.usedByDevice).length;
 
   return (
     <PanelShell role="Admin" user={admin.email} nav={ADMIN_NAV} active="/admin/codes">
@@ -39,8 +39,8 @@ export default async function AdminCodes() {
               <Row key={String(c._id)}>
                 <Td className="font-mono font-semibold text-slate-800 text-base">{c.code}</Td>
                 <Td>{c.credits}</Td>
-                <Td>{c.usedBy ? <Pill>used</Pill> : <Pill tone="green">unused</Pill>}</Td>
-                <Td>{(c.usedBy as unknown as { name?: string })?.name ?? '—'}</Td>
+                <Td>{c.usedByDevice ? <Pill>used</Pill> : <Pill tone="green">unused</Pill>}</Td>
+                <Td>{(c.usedByDevice as unknown as { name?: string; uid?: string })?.name || (c.usedByDevice as unknown as { uid?: string })?.uid || '—'}</Td>
                 <Td>{fmtDateTime(c.createdAt)}</Td>
               </Row>
             ))}

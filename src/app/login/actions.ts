@@ -2,20 +2,23 @@
 
 import { redirect } from 'next/navigation';
 import { dbConnect } from '@/lib/db';
-import { Clinic, Admin } from '@/models';
+import { Device, Admin } from '@/models';
 import { verifySecret, setSessionCookie, clearSessionCookie } from '@/lib/auth';
 
 export type LoginState = { error?: string };
 
-export async function clinicLogin(_prev: LoginState, formData: FormData): Promise<LoginState> {
-  const name = String(formData.get('name') || '').trim();
-  const pin = String(formData.get('pin') || '').trim();
-  if (!name || !/^\d{6}$/.test(pin)) return { error: 'Enter the clinic name and 6-digit PIN.' };
+// Device owner logs in with the web username + password they set on the device.
+export async function ownerLogin(_prev: LoginState, formData: FormData): Promise<LoginState> {
+  const user = String(formData.get('user') || '').trim();
+  const password = String(formData.get('password') || '');
+  if (!user || !password) return { error: 'Enter your username and password.' };
   await dbConnect();
-  const clinic = await Clinic.findOne({ name });
-  if (!clinic || !(await verifySecret(pin, clinic.pinHash))) return { error: 'Invalid clinic name or PIN.' };
-  if (clinic.status !== 'active') return { error: 'This clinic is suspended.' };
-  await setSessionCookie({ kind: 'clinic', sub: String(clinic._id), name: clinic.name });
+  const device = await Device.findOne({ webUser: user });
+  if (!device || !device.webPassHash || !(await verifySecret(password, device.webPassHash))) {
+    return { error: 'Invalid username or password.' };
+  }
+  if (device.status === 'suspended') return { error: 'This device is suspended.' };
+  await setSessionCookie({ kind: 'owner', sub: String(device._id), user });
   redirect('/dashboard');
 }
 

@@ -1,45 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { dbConnect } from '@/lib/db';
-import { Clinic, Device } from '@/models';
-import { hashSecret, verifySecret, pinVerifier } from '@/lib/auth';
-import { registerSchema, clinicPublic, issueDeviceToken, applyCredits } from '@/lib/device';
+import { Device } from '@/models';
+import { registerSchema, devicePublic, issueDeviceToken, applyCredits } from '@/lib/device';
 
-// POST /api/device/register  { uid, clinicName, pin, vets?, fw? }
-// Device "Setup" screen. Creates the clinic account on first use, or — if the
-// clinic name already exists and the PIN matches — links this device to it
-// (so a second device / re-setup uses the same "Save & continue" action).
+// POST /api/device/register  { uid, fw? }
+// A device auto-registers itself by its eFuse MAC on first online boot. Creates
+// the Device record if new (status 'new', awaiting on-device setup), otherwise
+// returns the existing one. Always returns a fresh device token.
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const parsed = registerSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'invalid body' }, { status: 400 });
   }
-  const { uid, clinicName, pin, vets, fw } = parsed.data;
+  const { uid, fw } = parsed.data;
 
   await dbConnect();
-
-  let clinic = await Clinic.findOne({ name: clinicName });
-  if (clinic) {
-    // Existing account: authenticate with the PIN before linking the device.
-    const ok = await verifySecret(pin, clinic.pinHash);
-    if (!ok) return NextResponse.json({ error: 'clinic exists — wrong PIN' }, { status: 401 });
-    if (clinic.status !== 'active') return NextResponse.json({ error: 'clinic suspended' }, { status: 403 });
-    if (vets) { clinic.vets = vets; await clinic.save(); }
-  } else {
-    // New account.
-    const pinHash = await hashSecret(pin);
-    clinic = await Clinic.create({ name: clinicName, pinHash, ...pinVerifier(pin), vets: vets ?? [], credits: 0 });
+  let device = await Device.findOne({ uid });
+  let created = false;
+  if (!device) {
+    device = await Device.create({ uid, fw: fw ?? '', status: 'new', lastSeenAt: new Date() });
+    created = true;
     const bonus = Number(process.env.STARTER_CREDITS ?? 10);
-    if (bonus > 0) await applyCredits(String(clinic._id), bonus, 'signup_bonus');
-    clinic = await Clinic.findById(clinic._id);
+    if (bonus > 0) {
+      await applyCredits(String(device._id), bonus, 'signup_bonus');
+      device = await Device.findById(device._id);
+    }
+  } else {
+    await Device.updateOne({ _id: device._id }, { fw: fw ?? device.fw, lastSeenAt: new Date() });
   }
-  if (!clinic) return NextResponse.json({ error: 'clinic error' }, { status: 500 });
+  if (!device) return NextResponse.json({ error: 'device error' }, { status: 500 });
 
-  const device = await Device.findOneAndUpdate(
-    { uid },
-    { uid, clinic: clinic._id, fw: fw ?? '', lastSeenAt: new Date() },
-    { new: true, upsert: true, setDefaultsOnInsert: true }
-  );
-
-  return NextResponse.json({ token: issueDeviceToken(device, clinic), clinic: clinicPublic(clinic), config: device.config });
+  return NextResponse.json({
+    created,
+    token: issueDeviceToken(device),
+    device: devicePublic(device),
+  });
 }
