@@ -12,12 +12,13 @@ export async function POST(req: NextRequest) {
   const parsed = uidSchema.safeParse(body?.uid);
   if (!parsed.success) return NextResponse.json({ error: 'invalid uid' }, { status: 400 });
   const uid = parsed.data;
+  const fw = typeof body?.fw === 'string' ? body.fw.slice(0, 20) : undefined;
 
   await dbConnect();
   const device = await Device.findOne({ uid });
   if (!device || device.status === 'suspended') return NextResponse.json({ registered: false });
 
-  await Device.updateOne({ _id: device._id }, { lastSeenAt: new Date() });
+  await Device.updateOne({ _id: device._id }, { lastSeenAt: new Date(), ...(fw ? { fw } : {}) });
   return NextResponse.json({
     registered: device.status === 'active',
     token: issueDeviceToken(device),

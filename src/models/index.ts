@@ -202,8 +202,33 @@ const AuditLogSchema = new Schema<IAuditLog>(
   { timestamps: { createdAt: true, updatedAt: false } }
 );
 
+/* ------------------------------ Firmware --------------------------------- */
+// An OTA firmware release. The binary is hosted on GitHub Releases (url); this
+// record is the manifest the device checks. Exactly one release is `active` at a
+// time — that's the target a device compares its own `fw` against.
+export interface IFirmware {
+  _id: Types.ObjectId;
+  version: string;   // semver-ish, e.g. "2.1.0" — compared against Device.fw
+  url: string;       // HTTPS URL of the .bin (GitHub release asset)
+  sha256: string;    // hex sha256 of the .bin (integrity reference)
+  notes: string;
+  active: boolean;   // the current rollout target (only one true at a time)
+  createdAt: Date;
+}
+const FirmwareSchema = new Schema<IFirmware>(
+  {
+    version: { type: String, required: true, unique: true, trim: true },
+    url: { type: String, required: true, trim: true },
+    sha256: { type: String, default: '', trim: true, lowercase: true },
+    notes: { type: String, default: '' },
+    active: { type: Boolean, default: false },
+  },
+  { timestamps: { createdAt: true, updatedAt: false } }
+);
+
 /* Guard against model recompilation on Next.js hot reload. */
 export const Device = (models.Device as mongoose.Model<IDevice>) || model<IDevice>('Device', DeviceSchema);
+export const Firmware = (models.Firmware as mongoose.Model<IFirmware>) || model<IFirmware>('Firmware', FirmwareSchema);
 export const Test = (models.Test as mongoose.Model<ITest>) || model<ITest>('Test', TestSchema);
 export const CreditTx = (models.CreditTx as mongoose.Model<ICreditTx>) || model<ICreditTx>('CreditTx', CreditTxSchema);
 export const Admin = (models.Admin as mongoose.Model<IAdmin>) || model<IAdmin>('Admin', AdminSchema);

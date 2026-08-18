@@ -4,7 +4,7 @@ import crypto from 'crypto';
 import { revalidatePath } from 'next/cache';
 import { getSession, pinVerifier } from '@/lib/auth';
 import { dbConnect } from '@/lib/db';
-import { Device, RedeemCode } from '@/models';
+import { Device, RedeemCode, Firmware } from '@/models';
 import { applyCredits } from '@/lib/device';
 import { logAudit } from '@/lib/audit';
 
@@ -92,6 +92,49 @@ export async function deleteDevice(formData: FormData) {
   const device = await Device.findByIdAndDelete(deviceId);   // measurements are kept for records
   await logAudit(admin.email, 'delete_device', device?.uid ?? deviceId, 'device removed');
   revalidatePath('/admin/devices');
+}
+
+/* ------------------------------ firmware (OTA) --------------------------- */
+export async function addFirmware(formData: FormData) {
+  const admin = await requireAdmin();
+  const version = String(formData.get('version') || '').trim();
+  const url = String(formData.get('url') || '').trim();
+  const sha256 = String(formData.get('sha256') || '').trim().toLowerCase();
+  const notes = String(formData.get('notes') || '').trim().slice(0, 500);
+  const makeActive = formData.get('active') === 'on';
+  if (!/^\d+(\.\d+){1,3}$/.test(version)) return;                 // a.b.c
+  if (!/^https:\/\//.test(url)) return;                          // HTTPS only
+  if (sha256 && !/^[0-9a-f]{64}$/.test(sha256)) return;          // 32-byte hex if given
+  await dbConnect();
+  const fw = await Firmware.findOneAndUpdate(
+    { version },
+    { version, url, sha256, notes, ...(makeActive ? { active: true } : {}) },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+  if (makeActive && fw) await Firmware.updateMany({ _id: { $ne: fw._id } }, { active: false });
+  await logAudit(admin.email, 'add_firmware', version, makeActive ? 'active' : 'draft');
+  revalidatePath('/admin/firmware');
+}
+
+export async function setActiveFirmware(formData: FormData) {
+  const admin = await requireAdmin();
+  const id = String(formData.get('firmwareId') || '');
+  if (!id) return;
+  await dbConnect();
+  const fw = await Firmware.findByIdAndUpdate(id, { active: true });
+  if (fw) await Firmware.updateMany({ _id: { $ne: id } }, { active: false });
+  await logAudit(admin.email, 'activate_firmware', fw?.version ?? id, 'rollout target');
+  revalidatePath('/admin/firmware');
+}
+
+export async function deleteFirmware(formData: FormData) {
+  const admin = await requireAdmin();
+  const id = String(formData.get('firmwareId') || '');
+  if (!id) return;
+  await dbConnect();
+  const fw = await Firmware.findByIdAndDelete(id);
+  await logAudit(admin.email, 'delete_firmware', fw?.version ?? id, 'removed');
+  revalidatePath('/admin/firmware');
 }
 
 /* -------------------------------- codes ---------------------------------- */
