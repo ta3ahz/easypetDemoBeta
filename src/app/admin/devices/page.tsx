@@ -51,7 +51,22 @@ export default async function AdminDevices() {
                       : <Pill>new</Pill>}
                   </Td>
                   <Td>{counts.get(id) ?? 0}</Td>
-                  <Td className="whitespace-nowrap">{fmtDateTime(d.lastSeenAt)}</Td>
+                  <Td className="whitespace-nowrap">
+                    {(() => {
+                      // The device pings the backend every ~30s while online, so a
+                      // last-seen within 90s means it's online right now.
+                      const seen = d.lastSeenAt ? new Date(d.lastSeenAt).getTime() : 0;
+                      const online = seen > 0 && Date.now() - seen < 90_000;
+                      return (
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-block w-2 h-2 rounded-full ${online ? 'bg-green-500' : 'bg-slate-300'}`} />
+                          <span className={online ? 'text-green-600 font-medium' : 'text-slate-500'}>
+                            {online ? 'online' : fmtDateTime(d.lastSeenAt)}
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </Td>
                   <Td>
                     <form action={setDeviceCredits} className="flex gap-1.5 items-center">
                       <input type="hidden" name="deviceId" value={id} />

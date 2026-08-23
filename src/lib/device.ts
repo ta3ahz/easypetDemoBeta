@@ -26,6 +26,7 @@ export const setupSchema = z.object({
 export const testSchema = z.object({
   vet: z.string().max(40).optional(),
   raw: z.number().positive().optional(),
+  i0: z.number().positive().optional(),   // per-test blank baseline measured on the device
   temp: z.number().optional(),
   patient: z
     .object({

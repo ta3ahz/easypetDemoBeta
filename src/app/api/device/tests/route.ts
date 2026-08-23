@@ -24,6 +24,7 @@ export async function POST(req: NextRequest) {
   await dbConnect();
   const device = await Device.findById(tok.sub);
   if (!device) return NextResponse.json({ error: 'device not found' }, { status: 404 });
+  if (device.status === 'suspended') return NextResponse.json({ error: 'device suspended' }, { status: 403 });
 
   // Idempotency: an offline device may retry an upload it already delivered.
   const clientId = parsed.data.clientId ?? null;
@@ -41,17 +42,23 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const { i0, a, b, ths } = device.config;
+  // The device measures a fresh blank baseline (I0) each test and sends it; use that
+  // when present, falling back to the calibration's stored i0 only if it's missing.
+  const { i0: cfgI0, a, b, ths } = device.config;
+  const i0 = parsed.data.i0 && parsed.data.i0 > 0 ? parsed.data.i0 : cfgI0;
   const raw = parsed.data.raw ?? null;
   let concentration: number | null = null;
   let positive = parsed.data.result?.positive ?? false;
-  if (raw && raw > 0) {
+  if (raw && raw > 0 && i0 > 0) {
     concentration = Math.log10(i0 / raw) * a + b;
     positive = concentration > ths;
   }
 
+  // Charge one credit; a null balance means there were none left -> reject the test
+  // rather than recording it for free. The device also blocks this up front.
   const balance = await applyCredits(String(device._id), -1, 'test_consume');
-  const creditsUsed = balance === null ? 0 : 1;
+  if (balance === null) return NextResponse.json({ error: 'no credits', credits: 0 }, { status: 402 });
+  const creditsUsed = 1;
 
   let test;
   try {
@@ -60,6 +67,7 @@ export async function POST(req: NextRequest) {
       vet: parsed.data.vet ?? '',
       patient: parsed.data.patient ?? {},
       raw,
+      i0: parsed.data.i0 ?? null,
       temp: parsed.data.temp ?? null,
       result: { positive, value: concentration },
       startedAt: parsed.data.startedAt ?? null,

@@ -81,6 +81,7 @@ export interface ITest {
     weight: string;
   };
   raw: number | null;
+  i0: number | null;        // per-test blank baseline the device measured
   temp: number | null;
   result: {
     positive: boolean;
@@ -105,6 +106,7 @@ const TestSchema = new Schema<ITest>(
       weight: { type: String, default: '' },
     },
     raw: { type: Number, default: null },
+    i0: { type: Number, default: null },
     temp: { type: Number, default: null },
     result: {
       positive: { type: Boolean, default: false },

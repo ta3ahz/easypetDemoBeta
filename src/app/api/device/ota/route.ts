@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
   await dbConnect();
   const device = await Device.findById(tok.sub);
   if (!device) return NextResponse.json({ error: 'device not found' }, { status: 404 });
+  if (device.status === 'suspended') return NextResponse.json({ error: 'device suspended' }, { status: 403 });
   await Device.updateOne({ _id: device._id }, { lastSeenAt: new Date() });
 
   const fw = await Firmware.findOne({ active: true }).lean();

@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
   await dbConnect();
   const device = await Device.findById(tok.sub);
   if (!device) return NextResponse.json({ error: 'device not found' }, { status: 404 });
+  if (device.status === 'suspended') return NextResponse.json({ error: 'device suspended' }, { status: 403 });
 
   // Atomically claim the code (only if unused).
   const code = await RedeemCode.findOneAndUpdate(
