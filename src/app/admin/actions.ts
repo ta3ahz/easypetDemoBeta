@@ -143,7 +143,9 @@ export async function generateCode(formData: FormData) {
   const credits = Math.trunc(Number(formData.get('credits') || 0));
   if (!Number.isFinite(credits) || credits < 1) return;
   await dbConnect();
-  const code = 'UBX-' + crypto.randomBytes(4).toString('hex').toUpperCase();
+  // Body is lowercase hex (0-9a-f) so the operator types only lowercase + digits
+  // after the fixed "UBX-" prefix (which the device adds automatically).
+  const code = 'UBX-' + crypto.randomBytes(4).toString('hex');
   await RedeemCode.create({ code, credits });
   await logAudit(admin.email, 'create_code', code, `${credits} credits`);
   revalidatePath('/admin/codes');

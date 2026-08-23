@@ -44,7 +44,9 @@ export const testSchema = z.object({
   clientId: z.string().max(40).optional(),
 });
 
-export const redeemSchema = z.object({ code: z.string().trim().toUpperCase().min(4).max(24) });
+// Codes are "UBX-" + lowercase hex; the device sends that canonical form, so we
+// only trim (no case-folding, which would break the lowercase body match).
+export const redeemSchema = z.object({ code: z.string().trim().min(4).max(24) });
 
 /* ------------------------------ payloads --------------------------------- */
 // What the device caches for offline use after register/setup/sync.
