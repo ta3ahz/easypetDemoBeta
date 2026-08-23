@@ -22,7 +22,7 @@ export async function GET() {
     .populate('device', 'uid name')
     .lean();
 
-  const header = ['date', 'device', 'deviceName', 'vet', 'patient', 'owner', 'species', 'sex', 'age', 'weight', 'raw', 'concentration', 'temp', 'result'];
+  const header = ['date', 'device', 'deviceName', 'vet', 'patient', 'owner', 'species', 'sex', 'age', 'weight', 'i0', 'raw', 'concentration', 'temp', 'result'];
   const rows = tests.map((t) => {
     const dev = t.device as unknown as { uid?: string; name?: string } | null;
     return [
@@ -36,6 +36,7 @@ export async function GET() {
       t.patient?.sex ?? '',
       t.patient?.age ?? '',
       t.patient?.weight ?? '',
+      t.i0 ?? '',
       t.raw ?? '',
       t.result?.value ?? '',
       t.temp ?? '',
