@@ -36,6 +36,8 @@ export interface IDevice {
   status: 'new' | 'active' | 'suspended'; // new = auto-registered, not set up yet
   fw: string;
   lastSeenAt: Date;
+  qrNonce: string | null;      // one-time nonce for the QR panel-login link (single use)
+  qrNonceExp: Date | null;     // when that nonce expires (~5 min)
   createdAt: Date;
   updatedAt: Date;
 }
@@ -58,6 +60,8 @@ const DeviceSchema = new Schema<IDevice>(
     status: { type: String, enum: ['new', 'active', 'suspended'], default: 'new' },
     fw: { type: String, default: '' },
     lastSeenAt: { type: Date, default: Date.now },
+    qrNonce: { type: String, default: null },
+    qrNonceExp: { type: Date, default: null },
   },
   { timestamps: true }
 );

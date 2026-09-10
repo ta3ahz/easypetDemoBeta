@@ -40,8 +40,11 @@ export function recoveryPin(uid: string): string {
 export type DeviceToken = { kind: 'device'; sub: string; uid: string };
 export type OwnerSession = { kind: 'owner'; sub: string; user: string };
 export type AdminSession = { kind: 'admin'; sub: string; email: string };
+// Short-lived, single-use token carried by the device's QR code. Exchanged at
+// /qr for an owner session. `n` is a nonce also stored on the device (single use).
+export type QrLoginToken = { kind: 'qrlogin'; sub: string; n: string };
 export type Session = OwnerSession | AdminSession;
-export type AnyToken = DeviceToken | Session;
+export type AnyToken = DeviceToken | Session | QrLoginToken;
 
 export function signToken(payload: AnyToken, expiresIn: string | number = '30d'): string {
   return jwt.sign(payload, JWT_SECRET, { expiresIn: expiresIn as jwt.SignOptions['expiresIn'] });
