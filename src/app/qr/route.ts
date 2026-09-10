@@ -6,16 +6,19 @@ import { verifyToken, signToken, SESSION_COOKIE, type QrLoginToken } from '@/lib
 // GET /qr?t=<token>
 // The target of the device's QR code. Validates the one-time token, clears the
 // nonce (single use), sets the owner session cookie, and lands on the dashboard.
-export async function GET(req: NextRequest) {
-  const fail = () => {
-    const url = new URL('/login', req.url);
-    url.searchParams.set('e', 'qr');   // "QR link expired or invalid"
-    return NextResponse.redirect(url);
-  };
+//
+// NOTE: redirects use a RELATIVE Location on purpose. Behind the Cloudflare/Railway
+// proxy `req.url` is the internal origin (https://localhost:8080), so building an
+// absolute URL from it sends the phone to a dead host. A relative Location lets the
+// browser resolve against the public URL it actually requested (uribx.app).
+function redirectTo(path: string): NextResponse {
+  return new NextResponse(null, { status: 307, headers: { Location: path } });
+}
 
+export async function GET(req: NextRequest) {
   const t = req.nextUrl.searchParams.get('t') || '';
   const payload = verifyToken<QrLoginToken>(t);
-  if (!payload || payload.kind !== 'qrlogin') return fail();
+  if (!payload || payload.kind !== 'qrlogin') return redirectTo('/login?e=qr');
 
   await dbConnect();
   const device = await Device.findById(payload.sub);
@@ -27,7 +30,7 @@ export async function GET(req: NextRequest) {
     !device.qrNonceExp ||
     device.qrNonceExp.getTime() < Date.now()
   ) {
-    return fail();
+    return redirectTo('/login?e=qr');
   }
 
   // Single use: burn the nonce so the same QR can't be replayed.
@@ -36,7 +39,7 @@ export async function GET(req: NextRequest) {
   await device.save();
 
   const session = signToken({ kind: 'owner', sub: String(device._id), user: device.webUser }, '7d');
-  const res = NextResponse.redirect(new URL('/dashboard', req.url));
+  const res = redirectTo('/dashboard');
   res.cookies.set(SESSION_COOKIE, session, {
     httpOnly: true,
     sameSite: 'lax',
