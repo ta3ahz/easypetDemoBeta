@@ -34,7 +34,7 @@ export default async function OwnerDashboard() {
           <thead className="bg-slate-50">
             <tr>
               <Th>Date</Th><Th>Patient</Th><Th>Owner</Th><Th>Species</Th><Th>Vet</Th>
-              <Th>I₀ (blank)</Th><Th>I (sample)</Th><Th>Conc.</Th><Th>Result</Th>
+              <Th>Result</Th>
             </tr>
           </thead>
           <tbody>
@@ -45,9 +45,6 @@ export default async function OwnerDashboard() {
                 <Td>{t.patient?.owner || '—'}</Td>
                 <Td className="capitalize">{t.patient?.species || '—'}</Td>
                 <Td>{t.vet || '—'}</Td>
-                <Td className="tabular-nums">{t.i0 != null ? Math.round(t.i0) : '—'}</Td>
-                <Td className="tabular-nums">{t.raw != null ? Math.round(t.raw) : '—'}</Td>
-                <Td className="tabular-nums">{t.result?.value != null ? t.result.value.toFixed(2) : '—'}</Td>
                 <Td><ResultBadge positive={t.result?.positive} /></Td>
               </Row>
             ))}
