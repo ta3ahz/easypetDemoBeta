@@ -6,6 +6,8 @@ import { PanelShell } from '@/components/PanelShell';
 import { ADMIN_NAV } from '@/components/nav';
 import { Section, TableWrap, Th, Td, Row, btn, input, Pill } from '@/components/ui';
 import { fmtDateTime } from '@/lib/format';
+import { unitErrLabel } from '@/lib/unitHealth';
+import type { IUnitHealth, IUnitEvent } from '@/models';
 import {
   updateDeviceConfig, setDeviceCredits, resetDevicePin, renameDevice, toggleDeviceStatus, deleteDevice,
 } from '../actions';
@@ -28,7 +30,7 @@ export default async function AdminDevices() {
         <TableWrap>
           <thead className="bg-slate-50">
             <tr>
-              <Th>Name / UID</Th><Th>Status</Th><Th>Tests</Th><Th>Last seen</Th>
+              <Th>Name / UID</Th><Th>Status</Th><Th>Tests</Th><Th>Last seen</Th><Th>Unit</Th>
               <Th>Credits</Th><Th>Calibration</Th><Th>PIN / Recovery</Th><Th>Actions</Th>
             </tr>
           </thead>
@@ -67,6 +69,7 @@ export default async function AdminDevices() {
                       );
                     })()}
                   </Td>
+                  <Td><UnitCell unit={d.unit} events={d.unitEvents} /></Td>
                   <Td>
                     <form action={setDeviceCredits} className="flex gap-1.5 items-center">
                       <input type="hidden" name="deviceId" value={id} />
@@ -114,6 +117,51 @@ export default async function AdminDevices() {
         </TableWrap>
       </Section>
     </PanelShell>
+  );
+}
+
+// Measurement-unit health from the latest sync (firmware >= 2.9.18).
+function UnitCell({ unit, events }: { unit?: IUnitHealth; events?: IUnitEvent[] }) {
+  if (!unit?.at) return <span className="text-xs text-slate-400" title="Reported by firmware 2.9.18+">—</span>;
+  const fresh = Date.now() - new Date(unit.at).getTime() < 90_000;
+  const errs = unit.errs ?? [];
+  const temp = unit.temp != null ? `${unit.temp.toFixed(1)} °C` : '';
+  let badge;
+  if (unit.off) badge = <Pill tone="amber">unit off</Pill>;
+  else if (errs.length)
+    badge = (
+      <Pill tone="red">
+        {errs.map((e) => `ERR:${e.code}×${e.n}`).join(' ')}
+      </Pill>
+    );
+  else if (unit.missed > 0 && unit.ok === 0) badge = <Pill tone="red">no reply</Pill>;
+  else if (unit.missed > 0) badge = <Pill tone="amber">{unit.missed} missed</Pill>;
+  else badge = <Pill tone="green">OK</Pill>;
+  const recent = [...(events ?? [])].reverse();
+  const last = recent[0];
+  return (
+    <div className={`text-xs ${fresh ? '' : 'opacity-60'}`}>
+      <div className="flex items-center gap-1.5 whitespace-nowrap">
+        {badge}
+        {temp && <span className="text-slate-600 tabular-nums">{temp}</span>}
+      </div>
+      {errs.length > 0 && <div className="mt-0.5 text-red-600">{errs.map((e) => unitErrLabel(e.code)).join(', ')}</div>}
+      {!fresh && <div className="mt-0.5 text-slate-400">as of {fmtDateTime(unit.at)}</div>}
+      {last && (
+        <details className="mt-1">
+          <summary className="cursor-pointer text-slate-500">
+            last issue: {last.code === 'NOREPLY' ? 'no reply' : `ERR:${last.code}`} · {fmtDateTime(last.at)}
+          </summary>
+          <ul className="mt-1 space-y-0.5 text-slate-500">
+            {recent.map((e, i) => (
+              <li key={i} className="whitespace-nowrap tabular-nums">
+                {fmtDateTime(e.at)} — {e.code === 'NOREPLY' ? 'no reply' : `ERR:${e.code}`} ×{e.n} ({unitErrLabel(e.code)})
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
   );
 }
 

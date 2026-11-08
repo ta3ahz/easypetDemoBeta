@@ -22,6 +22,18 @@ export interface IDeviceConfig {
   b: number;
   ths: number;
 }
+// Measurement-unit health, reported by firmware >= 2.9.18 with each ~30 s sync
+// (summary of the panel's 1 s 'T' heartbeat to the ONEXIS unit). Absent on older
+// firmware — every field is optional and nothing depends on it.
+export interface IUnitHealth {
+  at: Date;                 // when this window was reported
+  temp: number | null;      // last unit temperature (°C)
+  ok: number;               // 'T' polls answered with a temperature
+  missed: number;           // polls with no reply (cable / power)
+  off: boolean;             // unit reported STATE:OFF
+  errs: { code: string; n: number }[];  // ERR:<code> replies in this window
+}
+export interface IUnitEvent { at: Date; code: string; n: number }  // code = hex or 'NOREPLY'
 export interface IDevice {
   _id: Types.ObjectId;
   uid: string;                 // eFuse MAC (12 hex), unique per chip — identity
@@ -38,6 +50,8 @@ export interface IDevice {
   lastSeenAt: Date;
   qrNonce: string | null;      // one-time nonce for the QR panel-login link (single use)
   qrNonceExp: Date | null;     // when that nonce expires (~5 min)
+  unit?: IUnitHealth;          // latest measurement-unit health window (fw >= 2.9.18)
+  unitEvents?: IUnitEvent[];   // last 20 problem windows (errors / no reply), newest last
   createdAt: Date;
   updatedAt: Date;
 }
@@ -62,6 +76,24 @@ const DeviceSchema = new Schema<IDevice>(
     lastSeenAt: { type: Date, default: Date.now },
     qrNonce: { type: String, default: null },
     qrNonceExp: { type: Date, default: null },
+    unit: {
+      type: new Schema(
+        {
+          at: Date,
+          temp: { type: Number, default: null },
+          ok: { type: Number, default: 0 },
+          missed: { type: Number, default: 0 },
+          off: { type: Boolean, default: false },
+          errs: { type: [{ _id: false, code: String, n: Number }], default: [] },
+        },
+        { _id: false }
+      ),
+      default: undefined,
+    },
+    unitEvents: {
+      type: [{ _id: false, at: Date, code: String, n: Number }],
+      default: undefined,
+    },
   },
   { timestamps: true }
 );
