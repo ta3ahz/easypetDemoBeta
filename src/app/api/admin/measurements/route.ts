@@ -42,6 +42,8 @@ export async function GET(req: NextRequest) {
         vet: t.vet || '',
         patient: t.patient ?? null,
         i0: t.i0 ?? null,
+        i0Used: t.i0Used ?? null,
+        i0Fixed: !!t.i0Fixed,
         raw: t.raw ?? null,
         concentration: t.result?.value ?? null,
         temp: t.temp ?? null,

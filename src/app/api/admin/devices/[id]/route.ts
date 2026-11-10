@@ -50,8 +50,11 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     const c = (body.config ?? {}) as Record<string, unknown>;
     const [i0, a, b, ths] = [c.i0, c.a, c.b, c.ths].map((v) => (v === '' || v == null ? NaN : Number(v)));
     if ([i0, a, b, ths].some((n) => !Number.isFinite(n))) return jsonError(400, 'i0, a, b and ths must all be numbers');
-    await Device.updateOne({ _id: id }, { $set: { config: { i0, a, b, ths } } });
-    await auditApp(admin, 'set_config', device.uid, `i0=${i0} a=${a} b=${b} ths=${ths}`);
+    if (c.fixedI0 != null && typeof c.fixedI0 !== 'boolean') return jsonError(400, 'fixedI0 must be true or false');
+    // fixedI0 is optional here (older admin-app builds don't send it): keep the current value.
+    const fixedI0 = typeof c.fixedI0 === 'boolean' ? c.fixedI0 : !!device.config?.fixedI0;
+    await Device.updateOne({ _id: id }, { $set: { config: { i0, a, b, ths, fixedI0 } } });
+    await auditApp(admin, 'set_config', device.uid, `i0=${i0} a=${a} b=${b} ths=${ths} fixedI0=${fixedI0}`);
     return json({ ok: true });
   }
 

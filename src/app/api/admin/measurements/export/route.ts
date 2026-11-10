@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
   if (admin instanceof NextResponse) return admin;
 
   const tests = await Test.find().sort({ createdAt: -1 }).limit(5000).populate('device', 'uid name').lean();
-  const header = ['date', 'device', 'deviceName', 'vet', 'patient', 'owner', 'species', 'sex', 'age', 'weight', 'i0', 'raw', 'concentration', 'temp', 'result'];
+  const header = ['date', 'device', 'deviceName', 'vet', 'patient', 'owner', 'species', 'sex', 'age', 'weight', 'i0', 'raw', 'concentration', 'temp', 'result', 'i0Used', 'i0Mode'];
   const rows = tests.map((t) => {
     const dev = t.device as unknown as { uid?: string; name?: string } | null;
     return [
@@ -36,6 +36,8 @@ export async function GET(req: NextRequest) {
       t.result?.value ?? '',
       t.temp ?? '',
       t.result?.positive ? 'POSITIVE' : 'NEGATIVE',
+      t.i0Used ?? '',
+      t.i0Used != null ? (t.i0Fixed ? 'fixed' : 'blank') : '',
     ].map(csvCell).join(',');
   });
 

@@ -50,7 +50,13 @@ export default async function AdminMeasurements() {
                   <Td className="text-slate-800">{t.patient?.name || '—'}{t.patient?.owner ? ` · ${t.patient.owner}` : ''}</Td>
                   <Td className="capitalize">{t.patient?.species || '—'}</Td>
                   <Td>{t.vet || '—'}</Td>
-                  <Td className="font-mono">{t.i0 ?? '—'}</Td>
+                  <Td className="font-mono">
+                    {t.i0Fixed && t.i0Used != null ? (
+                      <span title={t.i0 != null ? `fixed i0 used · measured blank ${t.i0}` : 'fixed i0 used'}>
+                        {t.i0Used} <span className="text-[10px] font-sans font-semibold text-amber-600">FIXED</span>
+                      </span>
+                    ) : (t.i0 ?? '—')}
+                  </Td>
                   <Td className="font-mono">{t.raw ?? '—'}</Td>
                   <Td className="font-mono">{t.result?.value != null ? t.result.value.toFixed(3) : '—'}</Td>
                   <Td className="font-mono">{t.temp != null ? `${t.temp.toFixed(1)}°C` : '—'}</Td>

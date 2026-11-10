@@ -42,10 +42,19 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // The device measures a fresh blank baseline (I0) each test and sends it; use that
-  // when present, falling back to the calibration's stored i0 only if it's missing.
+  // I0 reference (decided here only; the firmware is unaware of the switch):
+  //  - this device's calibration has fixedI0 on -> the stored i0;
+  //  - otherwise the per-test blank the device measured, falling back to the
+  //    stored i0 only if the blank is missing.
+  // Note: an OFFLINE test is shown on the device with its own (blank-based) result;
+  // with fixedI0 on, the stored result can differ from what was shown.
   const { i0: cfgI0, a, b, ths } = device.config;
-  const i0 = parsed.data.i0 && parsed.data.i0 > 0 ? parsed.data.i0 : cfgI0;
+  const blank = parsed.data.i0 && parsed.data.i0 > 0 ? parsed.data.i0 : null;
+  let i0: number;
+  let i0Fixed: boolean;
+  if (device.config.fixedI0) { i0 = cfgI0; i0Fixed = true; }
+  else if (blank) { i0 = blank; i0Fixed = false; }
+  else { i0 = cfgI0; i0Fixed = true; }
   const raw = parsed.data.raw ?? null;
   let concentration: number | null = null;
   let positive = parsed.data.result?.positive ?? false;
@@ -68,6 +77,8 @@ export async function POST(req: NextRequest) {
       patient: parsed.data.patient ?? {},
       raw,
       i0: parsed.data.i0 ?? null,
+      i0Used: raw && raw > 0 && i0 > 0 ? i0 : null,
+      i0Fixed,
       temp: parsed.data.temp ?? null,
       result: { positive, value: concentration },
       startedAt: parsed.data.startedAt ?? null,

@@ -25,7 +25,7 @@ export default async function AdminDevices() {
     <PanelShell role="Admin" user={admin.email} nav={ADMIN_NAV} active="/admin/devices">
       <Section
         title="Devices"
-        subtitle="Each device is an account (eFuse MAC). concentration = log₁₀(i0/raw)·a + b, positive if > ths"
+        subtitle="Each device is an account (eFuse MAC). concentration = log₁₀(i0/raw)·a + b, positive if > ths. i0 = the per-test blank, or the i0 below when “fixed i0” is on"
       >
         <TableWrap>
           <thead className="bg-slate-50">
@@ -82,6 +82,13 @@ export default async function AdminDevices() {
                       <input type="hidden" name="deviceId" value={id} />
                       <Cfg name="i0" v={d.config?.i0} /><Cfg name="a" v={d.config?.a} />
                       <Cfg name="b" v={d.config?.b} /><Cfg name="ths" v={d.config?.ths} />
+                      <label
+                        className="flex items-center gap-1 text-xs text-slate-500"
+                        title="On: every test is computed with the i0 above instead of the per-test blank (the blank is still measured and recorded)"
+                      >
+                        <input name="fixedI0" type="checkbox" defaultChecked={!!d.config?.fixedI0} />
+                        <span>fixed i0</span>
+                      </label>
                       <button className={btn}>Save</button>
                     </form>
                   </Td>

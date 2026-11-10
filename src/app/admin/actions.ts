@@ -36,10 +36,11 @@ export async function updateDeviceConfig(formData: FormData) {
   const a = Number(formData.get('a'));
   const b = Number(formData.get('b'));
   const ths = Number(formData.get('ths'));
+  const fixedI0 = formData.get('fixedI0') === 'on';
   if (!deviceId || [i0, a, b, ths].some((n) => !Number.isFinite(n))) return;
   await dbConnect();
-  const device = await Device.findByIdAndUpdate(deviceId, { $set: { config: { i0, a, b, ths } } });
-  await logAudit(admin.email, 'set_config', device?.uid ?? '', `i0=${i0} a=${a} b=${b} ths=${ths}`);
+  const device = await Device.findByIdAndUpdate(deviceId, { $set: { config: { i0, a, b, ths, fixedI0 } } });
+  await logAudit(admin.email, 'set_config', device?.uid ?? '', `i0=${i0} a=${a} b=${b} ths=${ths} fixedI0=${fixedI0}`);
   revalidatePath('/admin/devices');
 }
 

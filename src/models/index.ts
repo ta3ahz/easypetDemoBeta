@@ -16,11 +16,14 @@ import mongoose, { Schema, model, models, Types } from 'mongoose';
 /* ------------------------------- Device ---------------------------------- */
 // Per-device photometer calibration: concentration = log10(i0/raw)*a + b,
 // positive if concentration > ths.
+// fixedI0: compute every test with the calibration's stored i0 instead of the
+// per-test blank the device measures (the blank is still measured and recorded).
 export interface IDeviceConfig {
   i0: number;
   a: number;
   b: number;
   ths: number;
+  fixedI0: boolean;
 }
 // Measurement-unit health, reported by firmware >= 2.9.18 with each ~30 s sync
 // (summary of the panel's 1 s 'T' heartbeat to the ONEXIS unit). Absent on older
@@ -69,6 +72,7 @@ const DeviceSchema = new Schema<IDevice>(
       a: { type: Number, default: 1 },
       b: { type: Number, default: 0 },
       ths: { type: Number, default: 1 },
+      fixedI0: { type: Boolean, default: false },
     },
     vets: { type: [String], default: [] },
     status: { type: String, enum: ['new', 'active', 'suspended'], default: 'new' },
@@ -118,6 +122,8 @@ export interface ITest {
   };
   raw: number | null;
   i0: number | null;        // per-test blank baseline the device measured
+  i0Used: number | null;    // I0 the result was actually computed with
+  i0Fixed: boolean;         // true = computed with the fixed calibration i0 (not the blank)
   temp: number | null;
   result: {
     positive: boolean;
@@ -143,6 +149,8 @@ const TestSchema = new Schema<ITest>(
     },
     raw: { type: Number, default: null },
     i0: { type: Number, default: null },
+    i0Used: { type: Number, default: null },
+    i0Fixed: { type: Boolean, default: false },
     temp: { type: Number, default: null },
     result: {
       positive: { type: Boolean, default: false },
